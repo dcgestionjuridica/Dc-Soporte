@@ -129,3 +129,22 @@ html[data-tema="claro"] .mod{background:linear-gradient(180deg,#fff,#f3f6fb)}
 }
 @media (max-width:899px){ .split.con-det .panel-lista{display:none} .split:not(.con-det) .panel-det{display:none} }
 @media (max-width:370px){ .kpis{grid-template-columns:1fr 1fr} .grid{grid-template-columns:repeat(4,1fr);gap:7px} .mod{font-size:10.5px} }
+/* 1.0.1 · proporciones del modelo en cualquier pantalla */
+#app:before{right:-90px;top:58px;width:420px;height:2.5px;opacity:.95;box-shadow:0 0 22px 2px var(--oro)}
+#app:after{content:"";position:fixed;right:-120px;top:-120px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(231,185,74,.28),transparent 65%);pointer-events:none;z-index:-1}
+html[data-tema="claro"] #app:after{background:radial-gradient(circle,rgba(231,185,74,.30),transparent 65%)}
+.mod{aspect-ratio:1/0.93;min-height:0}
+.mod svg{width:clamp(38px,9.5vw,58px);height:clamp(38px,9.5vw,58px)}
+.mod{font-size:clamp(11.5px,2.3vw,16px);gap:clamp(6px,1.4vw,10px)}
+.k .l1 svg{width:clamp(22px,4.6vw,32px);height:clamp(22px,4.6vw,32px)}
+.k b{font-size:clamp(19px,4.4vw,30px)}.k span{font-size:clamp(10.5px,2.1vw,14px)}.k em{font-size:clamp(10.5px,2vw,13.5px)}
+.k{padding:clamp(10px,2vw,16px) clamp(9px,1.8vw,15px)}
+@media (min-width:560px) and (max-width:899px){
+ #app{max-width:680px}
+ .logo{width:58px;height:58px;font-size:22px;border-radius:15px}
+ .marca b{font-size:23px}.marca span{font-size:10.5px}
+ .hola h2{font-size:36px}.hola small,.hola .rol,.hola .fecha{font-size:16px}
+ .sec{font-size:21px}.btn{min-height:60px;font-size:17px}.btn.oro .cir{width:34px;height:34px}
+ .tar h4{font-size:19px}.fl p,.desp p{font-size:16px}.fl p small,.desp p small{font-size:13.5px}
+ .grid{gap:12px}.kpis{gap:11px}
+}
