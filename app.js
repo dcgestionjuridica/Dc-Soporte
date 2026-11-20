@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.4.1';
+const VERSION = '1.4.2';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -191,7 +191,7 @@ const ATN = { asistencia: ['siren', '#b91c1c'], vence: ['hourglass-medium', '#8a
 function vistaInicio() {
   const T = E.tablero;
   const hoy = new Date().toLocaleDateString('es-CO', { timeZone: ZONA, weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
-  const cab = `<header class="cab"><div class="logo">DC</div><div class="marca"><b>DC Soporte<sup>®</sup></b><span>Centro de control</span></div>
+  const cab = `<header class="cab">${logoHtml()}<div class="marca"><b>DC Soporte<sup>®</sup></b><span>Centro de control</span></div>
     <div class="hola"><small>Bienvenido,</small><h2>Darío Carvajal</h2><div class="rol">${ic('shield-check', 'fill', 15).replace('class="ico"', 'class="ico" style="color:#e7b94a"')}Dueño de la plataforma</div>
     <div class="fecha">${ic('calendar-blank', 'regular', 17)}${esc(hoy.charAt(0).toUpperCase() + hoy.slice(1))}</div></div>
     <div class="der"><button class="btn-ico" id="cambiar-tema" aria-label="Cambiar modo claro u oscuro">${ic(document.documentElement.getAttribute('data-tema') === 'claro' ? 'moon' : 'sun', 'regular', 26)}</button>
@@ -237,7 +237,7 @@ function filaDespacho(d) {
 }
 function vistaDespachos() {
   const L = E.despachos && E.despachos.despachos;
-  const cab = `<header class="top2"><div class="logo">DC</div><div><b>Despachos</b><small>${L ? `${L.length} en total · ${L.filter(d => d.conectado).length} conectados ahora` : 'Cargando…'}</small></div>
+  const cab = `<header class="top2">${logoHtml()}<div><b>Despachos</b><small>${L ? `${L.length} en total · ${L.filter(d => d.conectado).length} conectados ahora` : 'Cargando…'}</small></div>
     <button class="vol" style="margin-left:auto" id="recargar" aria-label="Actualizar">${ic('arrows-clockwise', 'regular', 20)}</button></header>`;
   if (!L) { pintar(cab + '<div class="cargando"></div>'); return; }
   const cuenta = t => L.filter(d => d.tipo === t).length;
@@ -344,7 +344,7 @@ function tarModulos(D, n) {
 function vistaAjustes() {
   let modo = 'auto'; try { modo = localStorage.getItem('dcsoporte-tema') || 'auto'; } catch (e) { }
   const s = leerSesion() || {};
-  pintar(`<header class="top2"><div class="logo">DC</div><div><b>Ajustes</b><small>DC Soporte ${VERSION}</small></div></header><div class="cuerpo">
+  pintar(`<header class="top2">${logoHtml()}<div><b>Ajustes</b><small>DC Soporte ${VERSION}</small></div></header><div class="cuerpo">
     <div class="tar"><h4>${ic('circle-half', 'regular', 22)}Apariencia</h4><div class="opc" style="margin-top:8px">
       ${[['oscuro', 'moon', 'Oscuro'], ['claro', 'sun', 'Claro'], ['auto', 'circle-half', 'Automático']].map(([v, i, t]) => `<button data-modo="${v}" class="${modo === v ? 'on' : ''}">${ic(i, 'regular', 24)}${t}</button>`).join('')}</div>
       <div class="nota">Automático usa el modo que tenga puesto su celular o computador.</div></div>
@@ -411,7 +411,7 @@ function menuDescarga(V) {
 }
 function vistaVentas() {
   const V = E.ventas && E.ventas.periodo === E.periodo ? E.ventas : null;
-  const cab = `<header class="top2"><div class="logo">DC</div><div><b>Ventas</b><small>Pagos procesados por Bold</small></div>
+  const cab = `<header class="top2">${logoHtml()}<div><b>Ventas</b><small>Pagos procesados por Bold</small></div>
     <button class="vol" style="margin-left:auto" id="bajar" aria-label="Descargar informe en PDF o Excel">${ic('download-simple', 'regular', 22)}</button></header>`;
   const seg = `<div class="seg">${PERIODOS.map(([v, t]) => `<button data-per="${v}" class="${E.periodo === v ? 'on' : ''}">${t}</button>`).join('')}</div>`;
   if (!V) {
@@ -573,7 +573,7 @@ const TIPO_CASO = {
 const tipoCaso = t => TIPO_CASO[t] || TIPO_CASO.peticion;
 const numCaso = id => '#' + String(id).padStart(4, '0');
 function cabSoporte(sub) {
-  return `<header class="top2"><div class="logo">DC</div><div><b>${E.sopTab === 'buzon' ? 'Buzón de soporte' : 'Soporte'}</b><small>${sub}</small></div>
+  return `<header class="top2">${logoHtml()}<div><b>${E.sopTab === 'buzon' ? 'Buzón de soporte' : 'Soporte'}</b><small>${sub}</small></div>
     <button class="vol" style="margin-left:auto" id="recargar-sop" aria-label="Actualizar">${ic('arrows-clockwise', 'regular', 22)}</button></header>`;
 }
 function segSoporte() {
@@ -681,13 +681,59 @@ function forzarVersion(id, nombre) {
 
 function vistaPronto(v) {
   const P = { ventas: ['chart-line-up', 'Ventas', 'La contabilidad de ventas, renovaciones y anulaciones de Bold llega en la etapa 2.'], soporte: ['lifebuoy', 'Soporte', 'La asistencia remota llega en la etapa 4, y el buzón de errores y PQRS en la etapa 5.'] }[v] || ['gear-six', 'Próximamente', ''];
-  pintar(`<header class="top2"><div class="logo">DC</div><div><b>${P[1]}</b><small>En construcción</small></div></header><div class="cuerpo">
+  pintar(`<header class="top2">${logoHtml()}<div><b>${P[1]}</b><small>En construcción</small></div></header><div class="cuerpo">
     <div class="tar" style="text-align:center;padding:28px 18px">${ic(P[0], 'dt', 56).replace('class="ico"', 'class="ico" style="color:#0f1e3d;margin:0 auto 10px"')}<b style="font-size:16px">${P[1]}</b><div class="nota" style="font-size:13px">${P[2]}</div></div></div>`);
 }
 
 /* ---------- arranque ---------- */
+/* ---------- logo propio (se guarda en el servidor y se ve en cualquier equipo) ---------- */
+let LOGO = null; try { LOGO = localStorage.getItem('dcsoporte-logo'); } catch (e) { }
+function logoHtml() { return `<button class="logo${LOGO ? ' con-img' : ''}" data-logo aria-label="Cambiar la imagen del logo">${LOGO ? `<img src="${esc(LOGO)}" alt="">` : 'DC'}</button>`; }
+function ponerLogo(v) {
+  LOGO = v || null;
+  try { LOGO ? localStorage.setItem('dcsoporte-logo', LOGO) : localStorage.removeItem('dcsoporte-logo'); } catch (e) { }
+  document.querySelectorAll('[data-logo]').forEach(b => b.outerHTML = logoHtml());
+}
+function cargarLogo() { rpc('dcsoporte_logo_transaccional').then(r => { if (r && (r.logo || null) !== LOGO) ponerLogo(r.logo); }).catch(() => { }); }
+function prepararLogo(archivo) {
+  return new Promise((ok, mal) => {
+    if (!/^image\/(png|jpeg)$/.test(archivo.type)) return mal(new Error('Solo se permiten imágenes PNG o JPG.'));
+    if (archivo.size > 3 * 1024 * 1024) return mal(new Error('La imagen pesa más de 3 MB. Elija una más liviana.'));
+    const lector = new FileReader(), im = new Image();
+    im.onload = () => {
+      const L = 256, c = document.createElement('canvas'); c.width = c.height = L;
+      const lado = Math.min(im.naturalWidth, im.naturalHeight);
+      c.getContext('2d').drawImage(im, (im.naturalWidth - lado) / 2, (im.naturalHeight - lado) / 2, lado, lado, 0, 0, L, L);
+      ok(archivo.type === 'image/png' ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.9));
+    };
+    im.onerror = lector.onerror = () => mal(new Error('No se pudo leer esa imagen.'));
+    lector.onload = () => { im.src = lector.result; };
+    lector.readAsDataURL(archivo);
+  });
+}
+function elegirLogo() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/png,image/jpeg';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    try { const img = await prepararLogo(f); const r = await rpc('dcsoporte_logo_guardar_transaccional', { imagen: img }); ponerLogo(r.logo); toast('Listo. El logo nuevo se verá en todos sus equipos.'); }
+    catch (e) { toast(e.message === 'NO_PLATAFORMA' ? 'Su sesión terminó. Entre de nuevo.' : e.message); }
+  };
+  inp.click();
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-logo]'); if (!b) return;
+  if (!LOGO) return elegirLogo();
+  hojaSoporte(`<h4>Logo de DC Soporte</h4><small>PNG o JPG de hasta 3 MB. Se recorta en cuadrado.</small>
+    <div class="logo-prev"><img src="${esc(LOGO)}" alt=""></div>
+    <div class="acc"><button class="btn oro" id="lg-cambiar"><span class="cir">${ic('image', 'bold', 15)}</span>Elegir otra imagen</button>
+    <button class="btn az" id="lg-quitar">Volver al logo DC</button></div>`, (h, cerrar) => {
+    h.querySelector('#lg-cambiar').onclick = () => { cerrar(); elegirLogo(); };
+    h.querySelector('#lg-quitar').onclick = async () => { cerrar(); try { await rpc('dcsoporte_logo_guardar_transaccional', { imagen: null }); ponerLogo(null); toast('Volvió el logo DC.'); } catch (x) { toast(x.message); } };
+  });
+});
 async function iniciar() {
   E.vista = 'inicio'; render();
+  cargarLogo();
   vigilarInactividad();
   const ok = await cargar('tablero', () => rpc('dcsoporte_tablero_transaccional'));
   if (ok && E.vista === 'inicio') render();
