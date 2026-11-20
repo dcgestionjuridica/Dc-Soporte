@@ -341,3 +341,19 @@ button.logo{padding:0;overflow:hidden;cursor:pointer;font-family:inherit}
 @media (min-width:900px) and (max-height:620px){.aj-it{padding:5px 12px;border-radius:13px}.aj-it .ico:first-child{width:24px;height:24px}.aj-menu{gap:5px}}
 @media (min-width:900px){.planes-g{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}.planes-g .pl-g{grid-template-columns:1fr 1fr}}
 .tar.resalta{box-shadow:0 0 0 3px var(--oro),var(--tar-sombra);transition:box-shadow .3s}
+/* 1.6.0 · huella: oferta y «¡Listo!» */
+.hb-oferta{text-align:center;padding:4px 2px 0}
+.hb-oferta h4{font-size:20px;margin-top:4px}
+.hb-oferta p{font-size:14px;line-height:1.45;color:var(--tarT2);margin:8px 6px 6px}
+.hb-oferta .hb-circ.hb-mini{width:84px;height:84px;border-radius:50%;margin:4px auto 10px;display:grid;place-items:center;color:#e7b94a;
+  background:radial-gradient(circle at 35% 30%,#2a4f93,#0d2550 60%,#071634);border:2px solid #e7b94a;box-shadow:0 0 0 7px rgba(231,185,74,.14),0 10px 22px rgba(8,26,60,.35)}
+.hb-oferta .hb-circ.hb-ok{background:radial-gradient(circle at 35% 30%,#2fae62,#15803d 60%,#0d5a2a);color:#fff}
+.hb-oferta .hb-err{min-height:18px;font-size:13px;font-weight:600;color:#c62828;margin-bottom:6px}
+.hoja .hb-oferta .acc{margin:6px 0 4px}
+.hoja .hb-oferta .btn{width:auto;flex:1;justify-content:center;text-align:center;margin:0;padding:0 12px;border-radius:14px}
+.hoja .hb-oferta .btn.az{background:linear-gradient(180deg,#14306e,#0b1d4a);color:#fff;border:1.5px solid var(--oro)}
+.hoja .hb-oferta .btn.oro{border:0}
+.hoja .hb-oferta .btn span{flex:none}
+.hoja .hb-oferta .btn{white-space:nowrap;gap:8px;padding:0 10px}
+.hoja .hb-oferta .btn.oro{flex:1.35}
+.hoja .hb-oferta .btn.oro .cir{width:26px;height:26px;flex:none}

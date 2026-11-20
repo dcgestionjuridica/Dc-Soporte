@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.5.1';
+const VERSION = '1.6.0';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -40,6 +40,14 @@ function salud(n) { let s = ''; const c = n >= 4 ? 'g' : n === 3 ? 'y' : 'r'; fo
 function leerSesion() { try { return JSON.parse(sessionStorage.getItem(CLAVE_SESION)); } catch (e) { return null; } }
 function guardarSesion(s) { try { sessionStorage.setItem(CLAVE_SESION, JSON.stringify(s)); } catch (e) { } }
 function borrarSesion() { try { sessionStorage.removeItem(CLAVE_SESION); } catch (e) { } }
+// Sesión que entrega la huella: se lee el vencimiento y el correo del mismo token.
+function sesionDeTokens(v) {
+  let p = {}; try { p = JSON.parse(atob(v.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); } catch (e) { }
+  const s = { t: v.access_token, r: v.refresh_token, exp: p.exp ? p.exp * 1000 - 60000 : Date.now() + 50 * 60000, correo: p.email || '' };
+  return s;
+}
+function saludo() { const h = Number(new Date().toLocaleString('en-US', { timeZone: ZONA, hour: 'numeric', hour12: false })) % 24; return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'; }
+const taparCorreo = c => { const m = String(c || '').match(/^(.{1,2})[^@]*(@.+)$/); return m ? m[1] + '•••' + m[2] : ''; };
 async function auth(tipo, cuerpo) {
   const r = await fetch(`${SB}/auth/v1/token?grant_type=${tipo}`, { method: 'POST', headers: { apikey: LLAVE, 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
   const j = await r.json().catch(() => ({}));
@@ -98,8 +106,19 @@ function pintarEntrada(aviso) {
     <div class="frase capa" data-p=".2"><span class="ent-barra"></span><p>Control, soporte y crecimiento<br>de toda la plataforma.</p></div>
     <div class="modulos capa" data-p=".12">${mv('buildings', 'Despachos')}${mv('chart-line-up', 'Ventas')}${mv('headset', 'Soporte')}</div>
   </div></section>
-  <section class="tarjeta">
-    <div class="avatar">${sv('0 0 24 24', '<circle cx="12" cy="8" r="4.2"/><path d="M4 20.5c0-4.2 3.6-6.8 8-6.8s8 2.6 8 6.8z" stroke-linejoin="round"/>', 'stroke="#fff" stroke-width="1.8"')}</div>
+  <section class="tarjeta" id="tarjeta"></section>
+  <div class="version">DC Soporte · Versión ${VERSION}</div>
+</main>`;
+  const tarjeta = document.getElementById('tarjeta');
+  const AVATAR = `    <div class="avatar">${sv('0 0 24 24', '<circle cx="12" cy="8" r="4.2"/><path d="M4 20.5c0-4.2 3.6-6.8 8-6.8s8 2.6 8 6.8z" stroke-linejoin="round"/>', 'stroke="#fff" stroke-width="1.8"')}</div>`;
+  const SELLOS = `    <div class="sellos">
+      <div class="sello">${sv('0 0 24 24', '<path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10v-6z"/><path d="M8.3 12l2.6 2.6 4.9-5"/>', 'stroke="#141d33" stroke-width="1.6" stroke-linejoin="round"')}Datos seguros</div>
+      <div class="sello">${sv('0 0 24 24', '<rect x="4" y="10.5" width="16" height="11" rx="1.5"/><path d="M7.5 10.5V7.5a4.5 4.5 0 0 1 9 0v3"/><path d="M12 14.5v3"/>', 'stroke="#141d33" stroke-width="1.6" stroke-linejoin="round"')}Acceso exclusivo</div>
+      <div class="sello">${sv('0 0 24 24', '<path d="M12 3l10 5-10 5L2 8z"/><path d="M2 12l10 5 10-5M2 16l10 5 10-5"/>', 'stroke="#141d33" stroke-width="1.6" stroke-linejoin="round"')}Registro de auditoría</div>
+    </div>`;
+  // Formulario de contraseña (lo de siempre).
+  const formClave = (msgInicial) => {
+  tarjeta.innerHTML = AVATAR + `
     <h1>Iniciar Sesión</h1>
     <div class="sub">Acceda a su centro de control y soporte</div>
     <div class="subraya"></div>
@@ -108,17 +127,10 @@ function pintarEntrada(aviso) {
     <label class="campo">${sv('0 0 24 24', '<rect x="4" y="10.5" width="16" height="11" rx="1.5"/><path d="M7.5 10.5V7.5a4.5 4.5 0 0 1 9 0v3"/><circle cx="12" cy="15" r="1.4" fill="#1b2438"/><path d="M12 16v2.5"/>', 'stroke="#1b2438" stroke-width="1.8"')}
       <input id="clave" type="password" autocomplete="current-password" placeholder="Contraseña">
       <button type="button" class="ojo" id="ver" aria-label="Mostrar contraseña"></button></label>
-    <div id="msg">${aviso ? `<div class="msg mal">${esc(aviso)}</div>` : ''}</div>
+    <div id="msg"></div>
     <div class="olvido"><button type="button" id="olvido">¿Olvidó su contraseña?</button></div>
-    <button class="btn-ent" id="entrar">${sv('0 0 40 36', '<path d="M22 4h10a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H22"/><path d="M4 18h21M17 10l8 8-8 8"/>', 'stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"')}<span>Ingresar</span></button>
-    <div class="sellos">
-      <div class="sello">${sv('0 0 24 24', '<path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10v-6z"/><path d="M8.3 12l2.6 2.6 4.9-5"/>', 'stroke="#141d33" stroke-width="1.6" stroke-linejoin="round"')}Datos seguros</div>
-      <div class="sello">${sv('0 0 24 24', '<rect x="4" y="10.5" width="16" height="11" rx="1.5"/><path d="M7.5 10.5V7.5a4.5 4.5 0 0 1 9 0v3"/><path d="M12 14.5v3"/>', 'stroke="#141d33" stroke-width="1.6" stroke-linejoin="round"')}Acceso exclusivo</div>
-      <div class="sello">${sv('0 0 24 24', '<path d="M12 3l10 5-10 5L2 8z"/><path d="M2 12l10 5 10-5M2 16l10 5 10-5"/>', 'stroke="#141d33" stroke-width="1.6" stroke-linejoin="round"')}Registro de auditoría</div>
-    </div>
-  </section>
-  <div class="version">DC Soporte · Versión ${VERSION}</div>
-</main>`;
+    <button class="btn-ent" id="entrar">${sv('0 0 40 36', '<path d="M22 4h10a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H22"/><path d="M4 18h21M17 10l8 8-8 8"/>', 'stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"')}<span>Ingresar</span></button>` + SELLOS;
+  if (msgInicial) document.getElementById('msg').innerHTML = `<div class="msg mal">${esc(msgInicial)}</div>`;
   const ojo = (abierto) => sv('0 0 24 24', abierto
     ? '<path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.3"/>'
     : '<path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.3"/><path d="M3 3l18 18"/>', 'stroke="#1b2438" stroke-width="1.9"');
@@ -129,7 +141,7 @@ function pintarEntrada(aviso) {
   const ir = async () => {
     if (!c.value.trim() || !k.value) return decir('Escriba su correo y su contraseña.');
     b.disabled = true; b.querySelector('span').textContent = 'Un momento…'; decir('');
-    try { await auth('password', { email: c.value.trim(), password: k.value }); if (apagarEntrada) { apagarEntrada(); apagarEntrada = null; } await iniciar(); }
+    try { await auth('password', { email: c.value.trim(), password: k.value }); if (apagarEntrada) { apagarEntrada(); apagarEntrada = null; } E.via = 'clave'; await iniciar(); }
     catch (e) {
       b.disabled = false; b.querySelector('span').textContent = 'Ingresar';
       decir(e.message === 'NO_PLATAFORMA' ? 'Esta cuenta no es la de la plataforma. Solo el dueño puede entrar.' : 'Correo o contraseña incorrectos.');
@@ -145,6 +157,44 @@ function pintarEntrada(aviso) {
     } catch (e) { decir('No se pudo enviar el enlace. Intente de nuevo en un momento.'); }
   };
   b.onclick = ir; [c, k].forEach(i => i.onkeydown = e => { if (e.key === 'Enter') ir(); });
+  const g = DCHuella.quien(); if (!c.value && g.correo && DCHuella.activaAqui()) c.value = g.correo;
+  };
+  // Entrada con huella estilo banco: aparece sola si la huella está activa en este equipo.
+  const formHuella = () => {
+    const g = DCHuella.quien();
+    tarjeta.innerHTML = AVATAR + `<div class="hb">
+      <div class="hb-hola">${esc(saludo())},</div><div class="hb-nom">${esc(g.nombre || 'Bienvenido')}</div><div class="hb-correo">${esc(taparCorreo(g.correo))}</div>
+      <button type="button" class="hb-circ" id="hb-tocar" aria-label="Entrar con su huella">${ic('fingerprint', 'regular', 64)}</button>
+      <div class="hb-toque" id="hb-toque">Toque para entrar con su huella</div><div class="hb-toque2">También sirve el reconocimiento de la cara</div>
+      <div id="msg">${aviso ? `<div class="msg mal">${esc(aviso)}</div>` : ''}</div>
+      <button type="button" class="hb-clave" id="hb-clave">Entrar con contraseña</button>
+      <button type="button" class="hb-cambio" id="hb-cambio">¿No es usted? <b>Entrar con otra cuenta</b></button></div>` + SELLOS;
+    const msg = document.getElementById('msg'), toque = document.getElementById('hb-toque'), circ = document.getElementById('hb-tocar');
+    const decir = t => { msg.innerHTML = t ? `<div class="msg mal">${esc(t)}</div>` : ''; };
+    DCHuella.prepararReto();
+    let entrando = false;
+    DCHuella.alFirmar = () => { tarjeta.classList.add('hb-entrando'); toque.textContent = 'Entrando…'; };
+    circ.onclick = async () => {
+      if (entrando) return; entrando = true; circ.disabled = true; decir('');
+      try {
+        const v = await DCHuella.entrar();
+        if (!v) return;
+        guardarSesion(sesionDeTokens(v));
+        if (apagarEntrada) { apagarEntrada(); apagarEntrada = null; }
+        E.via = 'huella'; await iniciar(); return;
+      } catch (e) {
+        decir(e.message);
+        if (e.estado === 404) return formClave(e.message);
+      } finally {
+        entrando = false; circ.disabled = false; tarjeta.classList.remove('hb-entrando'); toque.textContent = 'Toque para entrar con su huella';
+        if (document.getElementById('hb-tocar')) DCHuella.prepararReto();
+      }
+    };
+    document.getElementById('hb-clave').onclick = () => formClave();
+    document.getElementById('hb-cambio').onclick = () => { DCHuella.olvidar(); formClave(); const c = document.getElementById('correo'); if (c) c.value = ''; };
+  };
+  formClave(aviso);
+  if (DCHuella.activaAqui()) DCHuella.disponible().then(ok => { if (ok && document.getElementById('tarjeta') === tarjeta && !document.getElementById('clave').value) formHuella(); });
   apagarEntrada = efectosEntrada();
 }
 
@@ -192,7 +242,7 @@ function render() {
 }
 async function cargar(clave, fn, datos) {
   try { E[clave] = await fn(datos); return true; }
-  catch (e) { if (e.message === 'SIN_SESION') { salir(); return false; } if (e.message === 'NO_PLATAFORMA') { salir('Esta cuenta no es la de la plataforma.'); return false; } toast('No se pudo cargar: ' + e.message); return false; }
+  catch (e) { if (e.message === 'SIN_SESION') { salir(); return false; } if (e.message === 'NO_PLATAFORMA') { if (E.via === 'huella') DCHuella.olvidar(); salir('Esta cuenta no es la de la plataforma.'); return false; } toast('No se pudo cargar: ' + e.message); return false; }
 }
 
 /* ---------- Inicio ---------- */
@@ -386,6 +436,7 @@ function resumenAj(k, A) {
   if (k === 'salud') { const m = A.salud.filter(x => x.estado !== 'ok').length; return m ? `${m} por revisar` : 'Todo bien'; }
   if (k === 'anuncios') { const v = A.anuncios.filter(x => x.activo).length; return v ? `${v} ${v === 1 ? 'anuncio activo' : 'anuncios activos'}` : ''; }
   if (k === 'planes') return `${A.planes.filter(p => p.activo).length} planes a la venta`;
+  if (k === 'seguridad') return HUELLA_OK && DCHuella.activaAqui() ? 'Huella activa en este equipo' : '';
   return '';
 }
 function panelAjustes(sec, A) {
@@ -429,6 +480,7 @@ function panelAjustes(sec, A) {
       <div class="nota">Automático usa el modo que tenga puesto su celular o computador.</div></div>`; }
   const s = leerSesion() || {};
   return `<div class="tar"><h4>${ic('shield-check', 'regular', 22)}Seguridad</h4>
+      ${HUELLA_OK ? `<div class="fila-sw"><span><b>Entrar con huella en este equipo</b><small>${DCHuella.activaAqui() ? 'Activa: al abrir, solo toque su huella' : 'Apagada: entra con la contraseña'}</small></span><button class="swi ${DCHuella.activaAqui() ? 'on' : ''}" id="sw-huella" role="switch" aria-checked="${DCHuella.activaAqui()}"><i></i></button></div>` : `<div class="dato"><span>Entrar con huella</span><b>Solo en celular o tableta con huella</b></div>`}
       <div class="dato"><span>Cuenta</span><b>${esc(s.correo || '—')}</b></div>
       <div class="dato"><span>Cierre por inactividad</span><b>${INACTIVIDAD_MIN} minutos</b></div>
       <div class="dato"><span>Al cerrar el navegador</span><b>Se cierra la sesión</b></div>
@@ -444,6 +496,7 @@ function enlazarAjustes(sec) {
     vistaAjustes();
   });
   const sl = document.getElementById('salir'); if (sl) sl.onclick = () => salir();
+  const sh = document.getElementById('sw-huella'); if (sh) sh.onclick = () => cambiarHuella(sh);
   $app.querySelectorAll('[data-forzar]').forEach(b => b.onclick = () => forzarVersion(Number(b.dataset.forzar), b.dataset.nom));
   $app.querySelectorAll('[data-tan]').forEach(b => b.onclick = () => { $app.querySelectorAll('[data-tan]').forEach(x => x.classList.toggle('on', x === b)); });
   if (typeof enlazarAjustesServidor === 'function') enlazarAjustesServidor(sec);
@@ -896,12 +949,54 @@ document.addEventListener('click', e => {
     h.querySelector('#lg-quitar').onclick = async () => { cerrar(); try { await rpc('dcsoporte_logo_guardar_transaccional', { imagen: null }); ponerLogo(null); toast('Volvió el logo DC.'); } catch (x) { toast(x.message); } };
   });
 });
+/* ---------- huella (igual que en la app del celular) ---------- */
+let HUELLA_OK = false;
+DCHuella.disponible().then(ok => { HUELLA_OK = !!ok; });
+const NOMBRE_DUENO = 'Darío Carvajal';
+const circHuella = () => `<div class="hb-circ hb-mini">${ic('fingerprint', 'regular', 46)}</div>`;
+/** Después de entrar con la contraseña: «¿Quiere entrar con su huella?» (una sola vez por equipo). */
+async function ofrecerHuella() {
+  if (!await DCHuella.disponible() || DCHuella.activaAqui() || DCHuella.yaRespondio() || document.querySelector('.hoja')) return;
+  hojaSoporte(`<div class="hb-oferta">${circHuella()}<h4>¿Quiere entrar con su huella?</h4>
+    <p>La próxima vez entra con solo tocar la pantalla, sin escribir la contraseña. Su huella se queda en su equipo; ni nosotros ni la aplicación la vemos.</p>
+    <div id="hb-err" class="hb-err" role="alert"></div>
+    <div class="acc"><button class="btn az" id="hb-no">Ahora no</button><button class="btn oro" id="hb-si"><span class="cir">${ic('fingerprint', 'bold', 15)}</span>Sí, usar mi huella</button></div></div>`, (h, cerrar) => {
+    h.onclick = null; // solo se cierra con los botones
+    h.querySelector('#hb-no').onclick = () => { DCHuella.noQuiere(); cerrar(); };
+    const si = h.querySelector('#hb-si');
+    si.onclick = async () => {
+      si.disabled = true; h.querySelector('#hb-err').textContent = '';
+      try { if (await activarHuella()) { cerrar(); setTimeout(huellaListo, 240); } }
+      catch (e) { h.querySelector('#hb-err').textContent = e.message || 'No se pudo activar la huella.'; }
+      si.disabled = false;
+    };
+  });
+}
+async function activarHuella() { const t = await token(); const s = leerSesion() || {}; return DCHuella.activar(t, NOMBRE_DUENO, s.correo); }
+function huellaListo() {
+  hojaSoporte(`<div class="hb-oferta"><div class="hb-circ hb-mini hb-ok">${ic('check', 'bold', 40)}</div><h4>¡Listo, ${esc(NOMBRE_DUENO.split(' ')[0])}!</h4>
+    <p>Su huella quedó activada en este equipo. La próxima vez que abra DC Soporte, solo tóquela para entrar.</p>
+    <div class="acc"><button class="btn oro" data-cerrar><span class="cir">${ic('house', 'bold', 15)}</span>Ir al inicio</button></div>
+    <div class="nota" style="text-align:center">Puede apagarla cuando quiera en Ajustes › Seguridad</div></div>`);
+}
+async function cambiarHuella(btn) {
+  btn.disabled = true;
+  try {
+    if (DCHuella.activaAqui()) { await DCHuella.quitar(await token()); toast('Huella apagada en este equipo'); }
+    else if (await activarHuella()) { toast('Huella activada en este equipo'); }
+  } catch (e) { if (e.message === 'SIN_SESION') return salir(); toast(e.message || 'No se pudo cambiar la huella'); }
+  if (E.vista === 'ajustes') vistaAjustes();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && document.getElementById('hb-tocar')) DCHuella.prepararReto(); });
+
 async function iniciar() {
   E.vista = 'inicio'; render();
   cargarLogo();
   vigilarInactividad();
   const ok = await cargar('tablero', () => rpc('dcsoporte_tablero_transaccional'));
   if (ok && E.vista === 'inicio') render();
+  if (ok && E.via === 'clave') ofrecerHuella();
+  E.via = null;
   cargar('despachos', () => rpc('dcsoporte_despachos_transaccional')).then(r => r && E.vista === 'despachos' && !E.det && vistaDespachos());
 }
 matchMedia('(prefers-color-scheme: light)').addEventListener && matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
