@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.0.4';
+const VERSION = '1.0.5';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -207,8 +207,9 @@ function vistaInicio() {
     ${M('asist', 'headset', 'Asistencia', '', 'La asistencia remota llega en la etapa 4.')}${M('err', 'bug-beetle', 'Errores', T.errores_7d ? `<span class="bad">${T.errores_7d}</span>` : '', 'El buzón de errores llega en la etapa 5.')}
     ${M('pqrs', 'chat-circle-text', 'PQRS', '', 'El buzón de PQRS llega en la etapa 5.')}${M('anun', 'megaphone', 'Anuncios', '', 'Los anuncios llegan en la etapa 6.')}
     ${M('planes', 'tag', 'Planes y precios', '', 'Planes y precios llegan en la etapa 6.')}${M('salud', 'heartbeat', 'Salud', '', 'La salud del sistema llega en la etapa 6.')}</div>
-    <div class="acc"><button class="btn oro" data-pronto="Dar de alta un despacho desde aquí llega en la etapa 6. Por ahora use Soporte técnico en la app."><span class="cir">${ic('plus', 'bold', 16)}</span>Nuevo despacho</button>
-    <button class="btn az" data-pronto="Los anuncios a todos los despachos llegan en la etapa 6.">${ic('paper-plane-tilt', 'regular', 20)}Enviar anuncio</button></div>`;
+</div>`;
+  const acc = (lado) => `<div class="acc acc-${lado}"><button class="btn oro" data-pronto="Dar de alta un despacho desde aquí llega en la etapa 6. Por ahora use Soporte técnico en la app."><span class="cir">${ic('plus', 'bold', 16)}</span>Nuevo despacho</button>
+    <button class="btn az" data-pronto="Los anuncios a todos los despachos llegan en la etapa 6.">${ic('paper-plane-tilt', 'regular', 20)}Enviar anuncio</button>`;
   const atn = T.atencion.length ? T.atencion.map(a => {
     const [icono, col] = ATN[a.tipo] || ['warning-circle', '#5b6478'];
     return `<div class="fl" ${a.despacho_id ? `data-desp="${Number(a.despacho_id)}" style="cursor:pointer"` : ''}>${ic(icono, 'dt', 26).replace('class="ico"', `class="ico" style="color:${col}"`)}<p>${esc(a.titulo)}<small>${esc(a.detalle)}</small></p><div class="h">${esc(hace(a.fecha))}</div></div>`;
@@ -217,7 +218,7 @@ function vistaInicio() {
     <div class="tar"><h4>${ic('heartbeat', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Resumen de despachos</h4>
       <div class="dato"><span>Pagaron por la página</span><b>${T.pagos}</b></div><div class="dato"><span>En prueba</span><b>${T.prueba}</b></div>
       <div class="dato"><span>Invitados</span><b>${T.invitados}</b></div><div class="dato"><span>Versión en uso</span><b>${esc(T.version || '—')}</b></div></div>`;
-  pintar(cab + `<div class="cuerpo"><div class="inicio-cols"><div>${kpis}${grid}</div><div>${tar}</div></div></div>`);
+  pintar(cab + `<div class="cuerpo"><div class="inicio-cols"><div>${kpis}${grid}${acc('izq')}</div><div>${tar}${acc('der')}</div></div></div>`);
 }
 
 /* ---------- Despachos ---------- */

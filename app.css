@@ -155,3 +155,17 @@ html[data-tema="claro"] #app:after{background:radial-gradient(circle,rgba(231,18
  .mod{aspect-ratio:auto;min-height:clamp(118px,10.5vw,150px);font-size:clamp(14px,1.15vw,17px);gap:10px;padding:12px 6px}
  .mod svg{width:clamp(44px,3.6vw,56px);height:clamp(44px,3.6vw,56px)}
 }
+
+/* 1.0.5: tableta acostada y computador, todo el inicio cabe en una pantalla */
+.acc-der{display:none}
+@media (min-width:900px){
+ .acc-izq{display:none}.acc-der{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}
+ .cab{padding-top:12px;padding-bottom:2px}
+ .hola{display:grid;grid-template-columns:auto auto 1fr;grid-template-rows:auto auto;column-gap:26px;align-items:end;padding-bottom:14px}
+ .hola small{grid-column:1;grid-row:1}.hola h2{grid-column:1;grid-row:2;font-size:30px}
+ .hola .rol{grid-column:2;grid-row:1;margin:0}.hola .fecha{grid-column:2;grid-row:2;margin:0 0 5px}
+ .kpis{margin-bottom:12px}.sec{margin-bottom:9px}
+ .grid{gap:12px;margin-bottom:0}
+ .mod{min-height:clamp(96px,8.2vw,124px);padding:8px 6px;gap:7px}
+ .mod svg{width:clamp(40px,3.2vw,50px);height:clamp(40px,3.2vw,50px)}
+}
