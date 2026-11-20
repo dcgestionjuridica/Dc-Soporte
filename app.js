@@ -1,0 +1,294 @@
+/* DC Soporte 1.0.0 · centro de control de la plataforma DC Gestión Jurídica
+   Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
+'use strict';
+const VERSION = '1.0.0';
+const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
+const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
+const CLAVE_SESION = 'dcsoporte-sesion';
+const INACTIVIDAD_MIN = 15;
+const ZONA = 'America/Bogota';
+
+const $app = document.getElementById('app');
+const E = { vista: 'inicio', filtro: 'todos', busca: '', det: null, detTab: 'resumen', tablero: null, despachos: null, detalle: null, perfil: null };
+
+/* ---------- utilidades ---------- */
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function ic(nombre, peso = 'regular', tam = 20) {
+  const k = ICONOS[nombre + ':' + peso] || ICONOS[nombre + ':regular'] || '';
+  return `<svg class="ico" width="${tam}" height="${tam}" viewBox="0 0 256 256" aria-hidden="true">${k}</svg>`;
+}
+const pesos = n => '$' + Math.round(Number(n) || 0).toLocaleString('es-CO');
+const corto = n => { n = Number(n) || 0; if (n >= 1e6) return (n / 1e6).toLocaleString('es-CO', { maximumFractionDigits: 1 }) + 'M'; if (n >= 1e3) return Math.round(n / 1e3) + 'K'; return String(n); };
+const fecha = (f, o) => f ? new Date(f).toLocaleDateString('es-CO', Object.assign({ timeZone: ZONA, day: '2-digit', month: '2-digit', year: 'numeric' }, o || {})) : '—';
+const hora = f => f ? new Date(f).toLocaleTimeString('es-CO', { timeZone: ZONA, hour: 'numeric', minute: '2-digit' }) : '';
+function hace(f) {
+  if (!f) return 'Nunca';
+  const m = Math.round((Date.now() - new Date(f).getTime()) / 60000);
+  if (m < -60) { const d = Math.ceil(-m / 1440); return d <= 1 ? 'Mañana' : `En ${d} días`; }
+  if (m < 1) return 'Ahora'; if (m < 60) return `Hace ${m} min`;
+  const h = Math.round(m / 60); if (h < 24) return `Hace ${h} h`;
+  const d = Math.round(h / 24); if (d === 1) return 'Ayer'; if (d < 30) return `Hace ${d} días`;
+  return fecha(f);
+}
+const duracion = min => { min = Math.round(min || 0); const h = Math.floor(min / 60), m = min % 60; return h ? `${h} h ${m ? m + ' min' : ''}`.trim() : `${m} min`; };
+const iniciales = n => String(n || '?').replace(/[^\p{L}\s]/gu, ' ').trim().split(/\s+/).filter(w => w.length > 2 || /^[A-ZÁÉÍÓÚÑ]/.test(w)).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
+function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2600); }
+const TIPO = { pago: ['Pago', 'e-pago'], prueba: ['Prueba', 'e-prueba'], invitado: ['Invitado', 'e-invitado'] };
+function salud(n) { let s = ''; const c = n >= 4 ? 'g' : n === 3 ? 'y' : 'r'; for (let i = 1; i <= 5; i++) s += `<s class="${i <= n ? c : ''}"></s>`; return `<span class="salud" title="Salud ${n} de 5">${s}</span>`; }
+
+/* ---------- sesión (se borra al cerrar el navegador) ---------- */
+function leerSesion() { try { return JSON.parse(sessionStorage.getItem(CLAVE_SESION)); } catch (e) { return null; } }
+function guardarSesion(s) { try { sessionStorage.setItem(CLAVE_SESION, JSON.stringify(s)); } catch (e) { } }
+function borrarSesion() { try { sessionStorage.removeItem(CLAVE_SESION); } catch (e) { } }
+async function auth(tipo, cuerpo) {
+  const r = await fetch(`${SB}/auth/v1/token?grant_type=${tipo}`, { method: 'POST', headers: { apikey: LLAVE, 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error_description || j.msg || 'No se pudo entrar');
+  const s = { t: j.access_token, r: j.refresh_token, exp: Date.now() + (j.expires_in - 60) * 1000, correo: j.user && j.user.email };
+  guardarSesion(s); return s;
+}
+async function token() {
+  let s = leerSesion(); if (!s) throw new Error('SIN_SESION');
+  if (Date.now() > s.exp) { try { s = await auth('refresh_token', { refresh_token: s.r }); } catch (e) { borrarSesion(); throw new Error('SIN_SESION'); } }
+  return s.t;
+}
+async function rpc(fn, datos = {}) {
+  const t = await token();
+  const r = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { apikey: LLAVE, Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify({ datos }) });
+  const j = await r.json().catch(() => null);
+  if (!r.ok) {
+    const msg = (j && (j.message || j.hint)) || 'Error del servidor';
+    if (r.status === 401 || /DC403|solo de la plataforma|JWT/i.test(msg)) { borrarSesion(); throw new Error('NO_PLATAFORMA'); }
+    throw new Error(msg);
+  }
+  return j;
+}
+async function salir(motivo) {
+  const s = leerSesion();
+  if (s) fetch(`${SB}/auth/v1/logout`, { method: 'POST', headers: { apikey: LLAVE, Authorization: 'Bearer ' + s.t } }).catch(() => { });
+  borrarSesion(); Object.assign(E, { tablero: null, despachos: null, detalle: null, det: null, vista: 'inicio' });
+  pintarEntrada(motivo);
+}
+let reloj = null;
+function vigilarInactividad() {
+  const reiniciar = () => { clearTimeout(reloj); reloj = setTimeout(() => salir('Se cerró la sesión por 15 minutos sin uso.'), INACTIVIDAD_MIN * 60000); };
+  ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(ev => addEventListener(ev, reiniciar, { passive: true }));
+  reiniciar();
+}
+
+/* ---------- entrada ---------- */
+function pintarEntrada(aviso) {
+  $app.innerHTML = `<div class="entrada"><div class="caja">
+    <div class="logo">DC</div><h1>DC <b>Soporte</b></h1><p class="s">Centro de control</p>
+    ${aviso ? `<div class="error">${esc(aviso)}</div>` : ''}
+    <div class="tar" style="padding:18px">
+      <div class="campo">${ic('user')}<input id="correo" type="email" autocomplete="username" placeholder="Correo de la plataforma"></div>
+      <div class="campo">${ic('lock-key')}<input id="clave" type="password" autocomplete="current-password" placeholder="Contraseña"><button id="ver" class="btn-ico" style="width:32px;height:32px;color:#5b6478" aria-label="Ver contraseña">${ic('eye')}</button></div>
+      <button id="entrar" class="btn oro" style="width:100%">Entrar ${ic('arrow-right', 'bold', 18)}</button>
+    </div>
+    <div class="pie">${ic('shield-check', 'fill', 14).replace('class="ico"', 'class="ico" style="display:inline;vertical-align:-2px;color:#e7b94a"')} Acceso exclusivo del dueño de DC Gestión Jurídica.<br>La sesión se cierra al cerrar el navegador o tras 15 minutos sin uso.</div>
+  </div></div>`;
+  const c = document.getElementById('correo'), k = document.getElementById('clave'), b = document.getElementById('entrar');
+  document.getElementById('ver').onclick = () => { k.type = k.type === 'password' ? 'text' : 'password'; };
+  const ir = async () => {
+    if (!c.value.trim() || !k.value) return toast('Escriba su correo y su contraseña.');
+    b.disabled = true; b.textContent = 'Entrando…';
+    try { await auth('password', { email: c.value.trim(), password: k.value }); await iniciar(); }
+    catch (e) { pintarEntrada(e.message === 'NO_PLATAFORMA' ? 'Esta cuenta no es la de la plataforma. Solo el dueño puede entrar.' : 'Correo o contraseña incorrectos.'); }
+  };
+  b.onclick = ir; k.onkeydown = e => { if (e.key === 'Enter') ir(); };
+  c.focus();
+}
+
+/* ---------- armazón ---------- */
+function nav() {
+  const it = (v, icono, t) => `<button class="it ${E.vista === v ? 'on' : ''}" data-ir="${v}">${ic(icono, E.vista === v ? 'fill' : 'regular', 25)}${t}</button>`;
+  const on = E.vista === 'inicio';
+  return `<nav class="nav"><div class="base">${it('despachos', 'buildings', 'Despachos')}${it('ventas', 'chart-line-up', 'Ventas')}<div class="hueco"></div>${it('soporte', 'lifebuoy', 'Soporte')}${it('ajustes', 'gear-six', 'Ajustes')}</div>
+    <button class="centro ${on ? 'on' : ''}" data-ir="inicio" aria-label="Inicio">${ic('house', on ? 'fill' : 'bold', 32)}</button><span class="lab ${on ? 'on' : ''}">Inicio</span></nav>`;
+}
+function pintar(html) {
+  $app.innerHTML = html + nav();
+  $app.querySelectorAll('[data-ir]').forEach(b => b.onclick = () => ir(b.dataset.ir));
+  $app.querySelectorAll('[data-desp]').forEach(b => b.onclick = () => abrirDespacho(Number(b.dataset.desp)));
+  $app.querySelectorAll('[data-pronto]').forEach(b => b.onclick = () => toast(b.dataset.pronto));
+}
+function ir(v) { E.vista = v; if (v !== 'despachos') E.det = null; scrollTo(0, 0); render(); }
+function render() {
+  try {
+    if (E.vista === 'inicio') return vistaInicio();
+    if (E.vista === 'despachos') return vistaDespachos();
+    if (E.vista === 'ajustes') return vistaAjustes();
+    return vistaPronto(E.vista);
+  } catch (e) { console.error(e); pintar(`<div class="cuerpo"><div class="aviso">${ic('warning-circle')}<div>Algo falló al mostrar esta pantalla. Toque Inicio para volver.</div></div></div>`); }
+}
+async function cargar(clave, fn, datos) {
+  try { E[clave] = await fn(datos); return true; }
+  catch (e) { if (e.message === 'SIN_SESION') { salir(); return false; } if (e.message === 'NO_PLATAFORMA') { salir('Esta cuenta no es la de la plataforma.'); return false; } toast('No se pudo cargar: ' + e.message); return false; }
+}
+
+/* ---------- Inicio ---------- */
+const ATN = { asistencia: ['siren', '#b91c1c'], vence: ['hourglass-medium', '#8a5a00'], error: ['bug-beetle', '#b91c1c'], venta: ['credit-card', '#15803d'] };
+function vistaInicio() {
+  const T = E.tablero;
+  const hoy = new Date().toLocaleDateString('es-CO', { timeZone: ZONA, weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+  const cab = `<header class="cab"><div class="logo">DC</div><div class="marca"><b>DC Soporte<sup>®</sup></b><span>Centro de control</span></div>
+    <div class="der"><button class="btn-ico" data-pronto="Las alertas al celular llegan en la etapa 6." aria-label="Avisos">${ic('bell', 'regular', 26)}${T && T.atencion.length ? '<i></i>' : ''}</button>
+    <button class="btn-ico" data-ir="ajustes" aria-label="Mi cuenta">${ic('user-circle', 'regular', 28)}</button></div></header>
+    <div class="hola"><small>Bienvenido,</small><h2>Darío Carvajal</h2><div class="rol">${ic('shield-check', 'fill', 15).replace('class="ico"', 'class="ico" style="color:#e7b94a"')}Dueño de la plataforma</div>
+    <div class="fecha">${ic('calendar-blank', 'regular', 17)}${esc(hoy.charAt(0).toUpperCase() + hoy.slice(1))}</div></div>`;
+  if (!T) { pintar(cab + '<div class="cargando"></div>'); return; }
+  const dif = T.ingreso_mes_anterior > 0 ? Math.round((T.ingreso_mes - T.ingreso_mes_anterior) * 100 / T.ingreso_mes_anterior) : null;
+  const k = (icono, n, l, e, cl, flecha) => `<div class="k"><div class="l1">${ic(icono, 'regular', 24)}<b>${esc(n)}</b></div><span>${esc(l)}</span><em class="${cl}">${flecha ? ic(flecha, 'bold', 11) : ''}${esc(e)}</em></div>`;
+  const kpis = `<div class="kpis">
+    ${k('buildings', T.despachos, 'Despachos', T.nuevos_mes ? `+${T.nuevos_mes} nuevos` : 'sin nuevos', T.nuevos_mes ? 'up' : 'neu', T.nuevos_mes ? 'trend-up' : '')}
+    ${k('currency-circle-dollar', corto(T.ingreso_mes), 'Ventas mes', dif == null ? 'este mes' : `${dif >= 0 ? '+' : ''}${dif}%`, dif == null ? 'neu' : dif >= 0 ? 'up' : 'down', dif == null ? '' : dif >= 0 ? 'trend-up' : 'trend-down')}
+    ${k('pulse', T.conectados, 'Conectados', `${T.usuarios_hoy} hoy`, 'neu', '')}
+    ${k('warning-circle', T.errores_7d, 'Errores 7 días', T.errores_7d > T.errores_ayer ? `+${T.errores_7d - T.errores_ayer}` : 'en calma', T.errores_7d > T.errores_ayer ? 'down' : 'up', T.errores_7d > T.errores_ayer ? 'trend-up' : '')}</div>`;
+  const M = (v, icono, t, extra, msg) => `<button class="mod ${v === 'despachos' ? 'on' : ''}" ${msg ? `data-pronto="${esc(msg)}"` : `data-ir="${v}"`}>${ic(icono, 'dt', 38).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}<div>${t}</div>${extra || ''}</button>`;
+  const grid = `<div class="sec">${ic('squares-four', 'fill', 22)}Centro de control</div><div class="grid">
+    ${M('despachos', 'buildings', 'Despachos')}${M('ventas', 'chart-line-up', 'Ventas', '', 'Ventas y contabilidad llegan en la etapa 2.')}
+    ${M('asist', 'headset', 'Asistencia', '', 'La asistencia remota llega en la etapa 4.')}${M('err', 'bug-beetle', 'Errores', T.errores_7d ? `<span class="bad">${T.errores_7d}</span>` : '', 'El buzón de errores llega en la etapa 5.')}
+    ${M('pqrs', 'chat-circle-text', 'PQRS', '', 'El buzón de PQRS llega en la etapa 5.')}${M('anun', 'megaphone', 'Anuncios', '', 'Los anuncios llegan en la etapa 6.')}
+    ${M('planes', 'tag', 'Planes y precios', '', 'Planes y precios llegan en la etapa 6.')}${M('salud', 'heartbeat', 'Salud', '', 'La salud del sistema llega en la etapa 6.')}</div>
+    <div class="acc"><button class="btn oro" data-pronto="Dar de alta un despacho desde aquí llega en la etapa 6. Por ahora use Soporte técnico en la app."><span class="cir">${ic('plus', 'bold', 16)}</span>Nuevo despacho</button>
+    <button class="btn az" data-pronto="Los anuncios a todos los despachos llegan en la etapa 6.">${ic('paper-plane-tilt', 'regular', 20)}Enviar anuncio</button></div>`;
+  const atn = T.atencion.length ? T.atencion.map(a => {
+    const [icono, col] = ATN[a.tipo] || ['warning-circle', '#5b6478'];
+    return `<div class="fl" ${a.despacho_id ? `data-desp="${Number(a.despacho_id)}" style="cursor:pointer"` : ''}>${ic(icono, 'dt', 26).replace('class="ico"', `class="ico" style="color:${col}"`)}<p>${esc(a.titulo)}<small>${esc(a.detalle)}</small></p><div class="h">${esc(hace(a.fecha))}</div></div>`;
+  }).join('') : `<div class="vacio">${ic('shield-check', 'dt', 24).replace('class="ico"', 'class="ico" style="color:#15803d"')}Todo en orden. No hay nada pendiente.</div>`;
+  const tar = `<div class="tar"><h4>${ic('clock-countdown', 'regular', 22)}Requiere su atención</h4>${atn}</div>
+    <div class="tar"><h4>${ic('heartbeat', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Resumen de despachos</h4>
+      <div class="dato"><span>Pagaron por la página</span><b>${T.pagos}</b></div><div class="dato"><span>En prueba</span><b>${T.prueba}</b></div>
+      <div class="dato"><span>Invitados</span><b>${T.invitados}</b></div><div class="dato"><span>Versión en uso</span><b>${esc(T.version || '—')}</b></div></div>`;
+  pintar(cab + `<div class="cuerpo"><div class="inicio-cols"><div>${kpis}${grid}</div><div>${tar}</div></div></div>`);
+}
+
+/* ---------- Despachos ---------- */
+function filaDespacho(d) {
+  const [t, c] = TIPO[d.tipo] || ['—', 'e-gris'];
+  const vence = d.vigente_hasta && new Date(d.vigente_hasta) < new Date(Date.now() + 3 * 864e5);
+  const sub = d.conectado ? `<span class="vivo"></span>Conectado ahora · ${d.usuarios} de ${d.usuarios_limite || '—'} usuarios`
+    : vence ? `${new Date(d.vigente_hasta) < new Date() ? 'Vencido' : 'Vence'} ${fecha(d.vigente_hasta)} · ${hace(d.ultima).toLowerCase()}`
+    : `Última conexión: ${d.ultima ? hace(d.ultima).toLowerCase() : 'nunca'} · ${d.usuarios} ${d.usuarios === 1 ? 'usuario' : 'usuarios'}`;
+  return `<div class="desp" data-desp="${Number(d.id)}"><div class="av">${esc(iniciales(d.nombre))}</div><p>${esc(d.nombre)}<small>${sub}</small>${salud(d.salud)}</p>
+    <span class="et ${vence ? 'e-ven' : c}">${vence ? 'VENCE' : esc(d.tipo === 'pago' ? d.plan.toUpperCase() : t.toUpperCase())}</span></div>`;
+}
+function vistaDespachos() {
+  const L = E.despachos && E.despachos.despachos;
+  const cab = `<header class="top2"><div class="logo">DC</div><div><b>Despachos</b><small>${L ? `${L.length} en total · ${L.filter(d => d.conectado).length} conectados ahora` : 'Cargando…'}</small></div>
+    <button class="vol" style="margin-left:auto" id="recargar" aria-label="Actualizar">${ic('arrows-clockwise', 'regular', 20)}</button></header>`;
+  if (!L) { pintar(cab + '<div class="cargando"></div>'); return; }
+  const cuenta = t => L.filter(d => d.tipo === t).length;
+  const q = E.busca.trim().toLowerCase();
+  const vis = L.filter(d => (E.filtro === 'todos' || d.tipo === E.filtro) && (!q || d.nombre.toLowerCase().includes(q)));
+  const seg = `<div class="seg">${[['todos', 'Todos', L.length], ['pago', 'Pagos', cuenta('pago')], ['prueba', 'Prueba', cuenta('prueba')], ['invitado', 'Invitados', cuenta('invitado')]].map(([v, t, n]) => `<button data-f="${v}" class="${E.filtro === v ? 'on' : ''}">${t} ${n}</button>`).join('')}</div>`;
+  const pagos = vis.filter(d => d.tipo === 'pago'), otros = vis.filter(d => d.tipo !== 'pago');
+  const bloque = (icono, titulo, arr) => arr.length ? `<div class="tar"><h4>${ic(icono, 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}${titulo}</h4>${arr.map(filaDespacho).join('')}</div>` : '';
+  const lista = `${seg}<div class="bus">${ic('magnifying-glass', 'regular', 18)}<input id="busca" placeholder="Buscar por nombre" value="${esc(E.busca)}"></div>
+    ${bloque('credit-card', 'Pagaron por la página (Bold)', pagos)}${bloque('gift', 'En prueba e invitados', otros)}
+    ${!vis.length ? `<div class="tar"><div class="vacio">${ic('magnifying-glass')}No hay despachos con ese filtro.</div></div>` : ''}`;
+  const det = E.det ? panelDetalle() : `<div class="tar"><div class="vacio">${ic('buildings', 'dt', 24).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Toque un despacho para ver su detalle.</div></div>`;
+  pintar((E.det && innerWidth < 900 ? '' : cab) + `<div class="cuerpo"><div class="split ${E.det ? 'con-det' : ''}"><div class="panel-lista">${lista}</div><div class="panel-det">${det}</div></div></div>`);
+  $app.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { E.filtro = b.dataset.f; vistaDespachos(); });
+  const bi = document.getElementById('busca'); if (bi) bi.oninput = () => { E.busca = bi.value; const p = bi.selectionStart; vistaDespachos(); const n = document.getElementById('busca'); n.focus(); n.setSelectionRange(p, p); };
+  const rc = document.getElementById('recargar'); if (rc) rc.onclick = async () => { E.despachos = null; vistaDespachos(); await cargar('despachos', () => rpc('dcsoporte_despachos_transaccional')); vistaDespachos(); };
+  $app.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { E.detTab = b.dataset.tab; vistaDespachos(); });
+  const v = document.getElementById('volver'); if (v) v.onclick = () => { E.det = null; vistaDespachos(); };
+  $app.querySelectorAll('[data-pronto]').forEach(b => b.onclick = () => toast(b.dataset.pronto));
+}
+async function abrirDespacho(id) {
+  E.vista = 'despachos'; E.det = id; E.detTab = 'resumen'; E.detalle = null;
+  if (!E.despachos) cargar('despachos', () => rpc('dcsoporte_despachos_transaccional')).then(() => E.vista === 'despachos' && vistaDespachos());
+  scrollTo(0, 0); vistaDespachos();
+  if (await cargar('detalle', () => rpc('dcsoporte_despacho_transaccional', { id }))) if (E.det === id) vistaDespachos();
+}
+function panelDetalle() {
+  const D = E.detalle;
+  const volver = `<button class="vol" id="volver" aria-label="Volver">${ic('caret-left', 'bold', 20)}</button>`;
+  if (!D || D.id !== E.det) return `<div class="top2" style="padding:4px 0 12px">${volver}</div><div class="cargando"></div>`;
+  const [t] = TIPO[D.tipo] || ['—'];
+  const cab = `<div class="top2" style="padding:4px 0 12px">${volver}<div class="av" style="width:48px;height:48px">${esc(iniciales(D.nombre))}</div>
+    <div style="min-width:0"><b style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(D.nombre)}</b><small>${esc(t)} · plan ${esc(D.plan ? D.plan.nombre : 'sin plan')} · desde ${fecha(D.creado_en)}</small></div></div>`;
+  const tabs = `<div class="seg">${[['resumen', 'Resumen'], ['actividad', 'Actividad'], ['usuarios', 'Usuarios'], ['pagos', 'Pagos']].map(([v, n]) => `<button data-tab="${v}" class="${E.detTab === v ? 'on' : ''}">${n}</button>`).join('')}</div>`;
+  let cuerpo = '';
+  const U = D.ultima;
+  if (E.detTab === 'resumen') {
+    const lim = (D.plan ? D.plan.usuarios : 0) + (D.usuarios_extra || 0);
+    const activos = D.usuarios.filter(u => u.activo).length;
+    const roles = {}; D.usuarios.filter(u => u.activo).forEach(u => roles[u.rol] = (roles[u.rol] || 0) + 1);
+    const vencido = D.vigente_hasta && new Date(D.vigente_hasta) < new Date();
+    cuerpo = `<div class="kpis dos">
+      <div class="k"><div class="l1">${ic('plugs-connected', 'regular', 24)}<b>${U && U.conectado ? 'Ahora' : esc(U ? hace(U.fecha) : 'Nunca')}</b></div><span>Última conexión${U ? ' · ' + esc(U.equipo || '') : ''}</span><em class="${U && U.conectado ? 'up' : 'neu'}">${U ? (U.conectado ? ic('circle', 'fill', 9) : '') + esc(U.usuario || '') : 'Aún no entra'}</em></div>
+      <div class="k"><div class="l1">${ic('timer', 'regular', 24)}<b>${esc(duracion(D.minutos_total))}</b></div><span>Tiempo de uso total</span><em class="${D.minutos_7d ? 'up' : 'neu'}">${D.minutos_7d ? ic('trend-up', 'bold', 11) : ''}${esc(duracion(D.minutos_7d))} esta semana</em></div>
+      <div class="k"><div class="l1">${ic('users-three', 'regular', 24)}<b>${activos} de ${lim || '—'}</b></div><span>Usuarios del plan</span><em class="neu">${esc(Object.entries(roles).map(([r, n]) => `${n} ${r}`).join(' · ') || 'Sin usuarios')}</em></div>
+      <div class="k"><div class="l1">${ic('calendar-check', 'regular', 24)}<b>${D.vigente_hasta ? esc(fecha(D.vigente_hasta, { year: '2-digit' })) : 'Sin fecha'}</b></div><span>Vigente hasta</span><em class="${vencido ? 'down' : 'neu'}">${vencido ? 'Vencido' : D.tipo === 'pago' ? 'Renueva con Bold' : 'Sin cobro'}</em></div></div>
+      ${D.soporte ? `<div class="aviso">${ic('lock-key', 'fill', 22)}<div>Este despacho le dio permiso de soporte hasta el ${esc(fecha(D.soporte.vence_en))} a las ${esc(hora(D.soporte.vence_en))}</div></div>` : ''}
+      ${tarModulos(D, 5)}
+      <div class="tar"><h4>${ic('identification-card', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Datos del despacho</h4>
+        <div class="dato"><span>Sesiones totales</span><b>${D.sesiones}</b></div><div class="dato"><span>Versión que usa</span><b>${esc(U ? U.version || '—' : '—')}</b></div>
+        <div class="dato"><span>Errores en 30 días</span><b>${D.errores_30d}</b></div><div class="dato"><span>Procesos incluidos</span><b>${(D.plan ? D.plan.procesos : 0) + (D.procesos_extra || 0)}</b></div></div>
+      <div class="acc"><button class="btn oro" data-pronto="Entrar a dar soporte desde aquí llega en la etapa 4."><span class="cir">${ic('headset', 'bold', 15)}</span>Dar soporte</button>
+      <button class="btn az" data-pronto="Escribirle al despacho desde aquí llega en la etapa 4.">${ic('envelope-simple', 'regular', 20)}Escribirle</button></div>`;
+  } else if (E.detTab === 'actividad') {
+    cuerpo = tarModulos(D, 50) + `<div class="aviso">${ic('clock-countdown', 'regular', 22)}<div>El recorrido pantalla por pantalla, con el tiempo en cada módulo, llega en la etapa 3. Por ahora se ven las acciones que la app ya anota.</div></div>`;
+  } else if (E.detTab === 'usuarios') {
+    cuerpo = `<div class="tar"><h4>${ic('users-three', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Usuarios (${D.usuarios.length})</h4>${D.usuarios.length ? D.usuarios.map(u => `
+      <div class="fl">${ic(u.titular ? 'crown' : 'user-gear', 'dt', 26).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}<p>${esc(u.nombre)}${u.titular ? ' · titular' : ''}<small>${esc(u.rol)} · ${esc(u.correo || '')}<br>${u.ultima ? 'Última vez ' + esc(hace(u.ultima).toLowerCase()) : 'Nunca ha entrado'}${u.equipos && u.equipos.length ? ' · ' + esc(u.equipos.join(', ')) : ''}</small></p>
+      <span class="et ${u.activo ? 'e-pago' : 'e-gris'}">${u.activo ? 'ACTIVO' : 'INACTIVO'}</span></div>`).join('') : `<div class="vacio">Sin usuarios.</div>`}</div>`;
+  } else {
+    cuerpo = `<div class="tar"><h4>${ic('receipt', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Pagos y renovaciones</h4>${D.pagos.length ? D.pagos.map(p => `
+      <div class="fl">${ic(p.anulado ? 'arrow-u-up-left' : (p.monto > 0 ? 'plus-circle' : 'gift'), 'dt', 26).replace('class="ico"', `class="ico" style="color:${p.anulado ? '#b91c1c' : p.monto > 0 ? '#15803d' : '#1d4ed8'}"`)}<p>${p.anulado ? 'Anulado' : p.monto > 0 ? 'Pago' : 'Días sin cobro'} · ${esc(p.plan || D.plan && D.plan.nombre || '')}<small>${esc(fecha(p.fecha))} · ${p.dias} días · ${esc(p.fuente || '')}${p.referencia ? ' · ' + esc(p.referencia) : ''}</small></p>
+      <b style="font-size:13px;${p.anulado ? 'color:#b91c1c;text-decoration:line-through' : ''}">${p.monto > 0 ? pesos(p.monto) : '—'}</b></div>`).join('') : `<div class="vacio">Todavía no tiene pagos.</div>`}</div>`;
+  }
+  return cab + tabs + cuerpo;
+}
+function tarModulos(D, n) {
+  const M = D.modulos.slice(0, n); const max = Math.max(1, ...M.map(m => m.acciones));
+  return `<div class="tar"><h4>${ic('list-magnifying-glass', 'regular', 22)}Actividad por módulo (30 días)${n < 50 ? `<a data-tab="actividad">Ver todo${ic('caret-right', 'bold', 12)}</a>` : ''}</h4>
+    ${M.length ? M.map(m => `<div class="mo"><span class="n">${ic('folder-open', 'dt', 20).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}${esc(m.modulo || 'General')}</span><div class="barra"><i style="width:${Math.max(3, Math.round(m.acciones * 100 / max))}%"></i></div><b>${m.acciones} acc.</b></div>`).join('')
+      : `<div class="vacio">Sin actividad registrada en 30 días.</div>`}</div>`;
+}
+
+/* ---------- Ajustes ---------- */
+function vistaAjustes() {
+  let modo = 'auto'; try { modo = localStorage.getItem('dcsoporte-tema') || 'auto'; } catch (e) { }
+  const s = leerSesion() || {};
+  pintar(`<header class="top2"><div class="logo">DC</div><div><b>Ajustes</b><small>DC Soporte ${VERSION}</small></div></header><div class="cuerpo">
+    <div class="tar"><h4>${ic('circle-half', 'regular', 22)}Apariencia</h4><div class="opc" style="margin-top:8px">
+      ${[['oscuro', 'moon', 'Oscuro'], ['claro', 'sun', 'Claro'], ['auto', 'circle-half', 'Automático']].map(([v, i, t]) => `<button data-modo="${v}" class="${modo === v ? 'on' : ''}">${ic(i, 'regular', 24)}${t}</button>`).join('')}</div>
+      <div class="nota">Automático usa el modo que tenga puesto su celular o computador.</div></div>
+    <div class="tar"><h4>${ic('shield-check', 'regular', 22)}Seguridad</h4>
+      <div class="dato"><span>Cuenta</span><b>${esc(s.correo || '—')}</b></div>
+      <div class="dato"><span>Cierre por inactividad</span><b>${INACTIVIDAD_MIN} minutos</b></div>
+      <div class="dato"><span>Al cerrar el navegador</span><b>Se cierra la sesión</b></div>
+      <div class="nota">Cada consulta la revisa el servidor: si la cuenta no es la de la plataforma, no se entrega ningún dato.</div></div>
+    <button class="btn az" id="salir" style="width:100%">${ic('sign-out', 'regular', 20)}Cerrar sesión</button></div>`);
+  $app.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => {
+    try { localStorage.setItem('dcsoporte-tema', b.dataset.modo); } catch (e) { }
+    const m = b.dataset.modo; document.documentElement.setAttribute('data-tema', m === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'claro' : 'oscuro') : m);
+    vistaAjustes();
+  });
+  document.getElementById('salir').onclick = () => salir();
+}
+function vistaPronto(v) {
+  const P = { ventas: ['chart-line-up', 'Ventas', 'La contabilidad de ventas, renovaciones y anulaciones de Bold llega en la etapa 2.'], soporte: ['lifebuoy', 'Soporte', 'La asistencia remota llega en la etapa 4, y el buzón de errores y PQRS en la etapa 5.'] }[v] || ['gear-six', 'Próximamente', ''];
+  pintar(`<header class="top2"><div class="logo">DC</div><div><b>${P[1]}</b><small>En construcción</small></div></header><div class="cuerpo">
+    <div class="tar" style="text-align:center;padding:28px 18px">${ic(P[0], 'dt', 56).replace('class="ico"', 'class="ico" style="color:#0f1e3d;margin:0 auto 10px"')}<b style="font-size:16px">${P[1]}</b><div class="nota" style="font-size:13px">${P[2]}</div></div></div>`);
+}
+
+/* ---------- arranque ---------- */
+async function iniciar() {
+  E.vista = 'inicio'; render();
+  vigilarInactividad();
+  const ok = await cargar('tablero', () => rpc('dcsoporte_tablero_transaccional'));
+  if (ok && E.vista === 'inicio') render();
+  cargar('despachos', () => rpc('dcsoporte_despachos_transaccional')).then(r => r && E.vista === 'despachos' && !E.det && vistaDespachos());
+}
+matchMedia('(prefers-color-scheme: light)').addEventListener && matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
+  let m = 'auto'; try { m = localStorage.getItem('dcsoporte-tema') || 'auto'; } catch (x) { }
+  if (m === 'auto') document.documentElement.setAttribute('data-tema', e.matches ? 'claro' : 'oscuro');
+});
+let anchoPrevio = innerWidth >= 900;
+addEventListener('resize', () => { const a = innerWidth >= 900; if (a !== anchoPrevio) { anchoPrevio = a; if (leerSesion()) render(); } });
+if (leerSesion()) iniciar(); else pintarEntrada();
