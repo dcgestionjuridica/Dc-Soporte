@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "DC Soporte",
+  "short_name": "DC Soporte",
+  "description": "Administración y soporte de DC Gestión Jurídica",
+  "lang": "es-CO",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1e3d",
+  "theme_color": "#0f1e3d",
+  "icons": [
+    { "src": "img/app/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "img/app/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "img/app/icono-mascara-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
