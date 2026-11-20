@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.4.2';
+const VERSION = '1.5.0';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -340,26 +340,158 @@ function tarModulos(D, n) {
       : `<div class="vacio">Sin actividad registrada en 30 días.</div>`}</div>`;
 }
 
-/* ---------- Ajustes ---------- */
+/* ---------- Ajustes (etapa 6): avisos al celular, anuncios, mantenimiento, planes, versiones y salud ---------- */
+const SECCIONES_AJ = [
+  ['avisos', 'bell-ringing', '#c58a12', 'Avisos al celular', 'Solo lo importante'],
+  ['anuncios', 'megaphone', '#1d4ed8', 'Anuncios a todos', 'Novedades y mensajes'],
+  ['mantenimiento', 'wrench', '#b91c1c', 'Modo mantenimiento', 'Pausar la app un rato'],
+  ['planes', 'tag', '#15803d', 'Planes y precios', 'Lo que se vende'],
+  ['versiones', 'arrows-clockwise', '#c58a12', 'Versiones', 'Quién sigue en una vieja'],
+  ['salud', 'heartbeat', '#b91c1c', 'Salud del sistema', 'Servidor, correo, Bold'],
+  ['apariencia', 'circle-half', '#0f1e3d', 'Apariencia', 'Claro u oscuro'],
+  ['seguridad', 'shield-check', '#0f1e3d', 'Seguridad', 'Su cuenta y la sesión']
+];
+const EVENTOS_AVISO = [['venta', 'Venta nueva o renovación'], ['anulacion', 'Anulación de un pago'], ['caso', 'Caso o mensaje nuevo en el buzón'], ['error', 'Error que se repite (3 veces en una hora)'], ['vence', 'Despacho que vence mañana'], ['asistencia', 'Un despacho le da permiso de soporte']];
 function vistaAjustes() {
-  let modo = 'auto'; try { modo = localStorage.getItem('dcsoporte-tema') || 'auto'; } catch (e) { }
+  const A = E.ajustes, sec = E.ajSec || (innerWidth >= 900 ? 'avisos' : null);
+  const cab = `<header class="top2">${sec && innerWidth < 900 ? `<button class="vol" id="volver-aj" aria-label="Volver">${ic('caret-left', 'bold', 20)}</button>` : logoHtml()}<div><b>${sec && innerWidth < 900 ? esc(SECCIONES_AJ.find(x => x[0] === sec)[3]) : 'Ajustes'}</b><small>DC Soporte ${VERSION}</small></div></header>`;
+  if (!A) {
+    pintar(cab + `<div class="cuerpo"><div class="cargando"></div></div>`); enlazarAjustes();
+    cargar('ajustes', async () => rpc('dcsoporte_ajustes_transaccional', { endpoint: await endpointPush() })).then(ok => ok && E.vista === 'ajustes' && vistaAjustes());
+    return;
+  }
+  const icT = (n, col, t = 26) => ic(n, 'dt', t).replace('class="ico"', `class="ico" style="color:${col}"`);
+  const menu = `<div class="aj-menu">${SECCIONES_AJ.map(([k, i, col, t, sub]) => `<button class="aj-it ${sec === k ? 'on' : ''}" data-aj="${k}">${icT(i, col, 28)}<span><b>${t}</b><small>${esc(resumenAj(k, A) || sub)}</small></span>${ic('caret-right', 'bold', 14)}</button>`).join('')}</div>`;
+  const panel = sec ? panelAjustes(sec, A) : '';
+  const cuerpo = innerWidth >= 900 ? `<div class="aj-cols">${menu}<div>${panel}</div></div>` : (sec ? panel : menu);
+  pintar(cab + `<div class="cuerpo">${cuerpo}</div>`);
+  enlazarAjustes(sec);
+}
+function resumenAj(k, A) {
+  if (k === 'avisos') return A.avisos.activo_aqui ? 'Activos en este equipo' : 'Apagados en este equipo';
+  if (k === 'mantenimiento') return A.mantenimiento.activo ? 'ENCENDIDO' : 'Apagado';
+  if (k === 'versiones') return A.versiones.viejos ? `${A.versiones.viejos} ${A.versiones.viejos === 1 ? 'equipo' : 'equipos'} en versión vieja` : `Todos en ${A.versiones.ultima}`;
+  if (k === 'salud') { const m = A.salud.filter(x => x.estado !== 'ok').length; return m ? `${m} por revisar` : 'Todo bien'; }
+  if (k === 'anuncios') { const v = A.anuncios.filter(x => x.activo).length; return v ? `${v} ${v === 1 ? 'anuncio activo' : 'anuncios activos'}` : ''; }
+  if (k === 'planes') return `${A.planes.filter(p => p.activo).length} planes a la venta`;
+  return '';
+}
+function panelAjustes(sec, A) {
+  const icT = (n, col, t = 22) => ic(n, 'dt', t).replace('class="ico"', `class="ico" style="color:${col}"`);
+  const interruptor = (id, on) => `<button class="swi ${on ? 'on' : ''}" id="${id}" role="switch" aria-checked="${on}"><i></i></button>`;
+  if (sec === 'avisos') return `<div class="tar"><h4>${icT('bell-ringing', '#c58a12')}Avisos al celular</h4>
+      <div class="fila-sw"><span><b>Recibir avisos en este equipo</b><small>${A.avisos.equipos} ${A.avisos.equipos === 1 ? 'equipo activado' : 'equipos activados'} en total</small></span>${interruptor('sw-avisos', A.avisos.activo_aqui)}</div>
+      <div class="sub-t">Avisarme cuando…</div>
+      <div class="chks">${EVENTOS_AVISO.map(([k, t]) => `<label class="chk"><input type="checkbox" data-ev="${k}" ${A.avisos.eventos.includes(k) ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
+      <div class="acc" style="margin:12px 0 4px"><button class="btn az" id="probar-aviso">${ic('paper-plane-tilt', 'regular', 20)}Enviar un aviso de prueba</button></div>
+      <div class="nota">Nada más que esto, para no llenarlo de ruido. En el iPhone, primero agregue DC Soporte a la pantalla de inicio desde Safari.</div></div>`;
+  if (sec === 'anuncios') return `<div class="tar"><h4>${icT('megaphone', '#1d4ed8')}Nuevo anuncio para todos los despachos</h4>
+      <div class="opc opc-t">${[['novedad', 'sparkle', 'Novedad'], ['aviso', 'info', 'Aviso'], ['importante', 'warning-circle', 'Importante']].map(([v, i, t], n) => `<button data-tan="${v}" class="${n === 0 ? 'on' : ''}">${ic(i, 'regular', 22)}${t}</button>`).join('')}</div>
+      <input class="campo" id="an-tit" maxlength="80" placeholder="Título (ej.: Ya puede escribirnos desde la app)">
+      <textarea class="campo" id="an-txt" rows="3" maxlength="400" placeholder="Mensaje corto que verán al entrar a la app"></textarea>
+      <div class="acc" style="margin:4px 0"><button class="btn oro" id="an-pub"><span class="cir">${ic('megaphone', 'bold', 15)}</span>Publicar a todos</button></div>
+      <div class="nota">Sale una sola vez a cada persona, al entrar a la app comercial (versión 1.7.45 en adelante). Usted ve cuántos lo leyeron.</div></div>
+    <div class="tar"><h4>${icT('list-checks', '#0f1e3d')}Anuncios publicados</h4>${A.anuncios.length ? A.anuncios.map(x => `<div class="fl">${icT(x.tipo === 'importante' ? 'warning-circle' : x.tipo === 'aviso' ? 'info' : 'sparkle', x.tipo === 'importante' ? '#b91c1c' : '#1d4ed8', 24)}<p>${esc(x.titulo)}<small>${esc(fecha(x.creado_en))} · leído por ${x.leidos} de ${x.personas} personas</small></p>${x.activo ? `<button class="mini-btn" data-retirar="${Number(x.id)}">Retirar</button>` : '<span class="et e-gris">RETIRADO</span>'}</div>`).join('') : `<div class="vacio">Todavía no ha publicado anuncios.</div>`}</div>`;
+  if (sec === 'mantenimiento') { const M = A.mantenimiento; return `<div class="tar"><h4>${icT('wrench', '#b91c1c')}Modo mantenimiento</h4>
+      <div class="fila-sw"><span><b>${M.activo ? 'La app está en mantenimiento' : 'La app funciona normal'}</b><small>${M.activo ? 'Desde ' + esc(hora(M.desde)) : 'Nadie ve ningún aviso'}</small></span>${interruptor('sw-mant', M.activo)}</div>
+      <textarea class="campo" id="mt-txt" rows="2" maxlength="160">${esc(M.mensaje || 'Estamos mejorando la aplicación. Volvemos en un momento.')}</textarea>
+      <div class="nota">Mientras esté encendido, todos los despachos ven este mensaje en pantalla completa y no pueden trabajar. Usted (la plataforma) sigue entrando normal. Se apaga solo en ${M.horas || 2} horas si lo olvida.</div></div>`; }
+  if (sec === 'planes') return `<div class="aviso">${ic('warning-circle', 'regular', 22)}<div>Un precio nuevo aplica de una vez a las compras nuevas. A quien ya pagó, se le cobra en su siguiente renovación y solo después de avisarle con 30 días, como dice el contrato.</div></div>
+    <div class="planes-g">${A.planes.map(p => `<div class="tar plan"><h4>${icT('tag', '#15803d')}${esc(p.nombre)}${interruptor('sw-plan-' + p.id, p.activo).replace('class="swi', 'class="swi mini')}</h4>
+      <div class="pl-g">
+        <label>Mensual<input class="campo" inputmode="numeric" data-pl="${p.id}" data-k="precio_mensual" value="${esc(pesos(p.precio_mensual))}"></label>
+        <label>Anual<input class="campo" inputmode="numeric" data-pl="${p.id}" data-k="precio_anual" value="${esc(pesos(p.precio_anual))}"></label>
+        <label>Usuarios<input class="campo" inputmode="numeric" data-pl="${p.id}" data-k="usuarios_incluidos" value="${p.usuarios_incluidos}"></label>
+        <label>Usuario extra<input class="campo" inputmode="numeric" data-pl="${p.id}" data-k="precio_usuario_adicional" value="${esc(pesos(p.precio_usuario_adicional))}"></label>
+      </div><small class="pl-n">${p.despachos} ${p.despachos === 1 ? 'despacho lo tiene' : 'despachos lo tienen'} · ${p.procesos_incluidos} procesos incluidos</small></div>`).join('')}</div>
+    <div class="acc"><button class="btn oro" id="pl-guardar"><span class="cir">${ic('check', 'bold', 15)}</span>Guardar precios</button></div>`;
+  if (sec === 'versiones') { const V = A.versiones; return `<div class="kpis dos"><div class="k"><div class="l1">${ic('rocket-launch', 'regular', 24)}<b>${esc(V.ultima)}</b></div><span>Versión publicada</span><em class="up">${esc(hace(V.publicada_en))}</em></div>
+      <div class="k"><div class="l1">${ic('desktop', 'regular', 24)}<b>${V.equipos - V.viejos} de ${V.equipos}</b></div><span>Equipos al día (7 días)</span><em class="${V.viejos ? 'down' : 'up'}">${V.viejos ? V.viejos + ' en versión vieja' : 'Todos al día'}</em></div></div>
+    <div class="tar"><h4>${icT('arrows-clockwise', '#c58a12')}Equipos por despacho</h4>${V.despachos.map(d => `<div class="fl">${icT(d.viejos ? 'warning-circle' : 'check-circle', d.viejos ? '#c58a12' : '#15803d', 24)}<p>${esc(d.nombre)}<small>${d.detalle.map(x => esc(x.equipo) + ' · v' + esc(x.version)).join(' · ')}</small></p>${d.viejos ? `<button class="mini-btn" data-forzar="${Number(d.id)}" data-nom="${esc(d.nombre)}">Forzar</button>` : '<span class="et e-pago">AL DÍA</span>'}</div>`).join('') || '<div class="vacio">Nadie ha entrado en los últimos 7 días.</div>'}</div>
+    <div class="nota">La app se actualiza sola cuando cada persona sale y vuelve a entrar. «Forzar» la recarga en el próximo minuto.</div>`; }
+  if (sec === 'salud') return `<div class="tar"><h4>${icT('heartbeat', '#b91c1c')}Salud del sistema</h4>${A.salud.map(x => `<div class="fl">${icT(x.estado === 'ok' ? 'check-circle' : x.estado === 'alerta' ? 'warning-circle' : 'warning-octagon', x.estado === 'ok' ? '#15803d' : x.estado === 'alerta' ? '#c58a12' : '#b91c1c', 26)}<p>${esc(x.nombre)}<small>${esc(x.detalle)}</small></p><span class="et ${x.estado === 'ok' ? 'e-pago' : x.estado === 'alerta' ? 'e-oro' : 'e-ven'}">${x.estado === 'ok' ? 'BIEN' : x.estado === 'alerta' ? 'REVISAR' : 'FALLA'}</span></div>`).join('')}</div>
+    <div class="nota">Se revisa cada vez que abre esta pantalla. Si algo falla, también le llega un aviso al celular.</div>`;
+  if (sec === 'apariencia') { let modo = 'auto'; try { modo = localStorage.getItem('dcsoporte-tema') || 'auto'; } catch (e) { }
+    return `<div class="tar"><h4>${ic('circle-half', 'regular', 22)}Apariencia</h4><div class="opc" style="margin-top:8px">
+      ${[['oscuro', 'moon', 'Oscuro'], ['claro', 'sun', 'Claro'], ['auto', 'circle-half', 'Automático']].map(([v, i, t]) => `<button data-tema-op="${v}" class="${modo === v ? 'on' : ''}">${ic(i, 'regular', 24)}${t}</button>`).join('')}</div>
+      <div class="nota">Automático usa el modo que tenga puesto su celular o computador.</div></div>`; }
   const s = leerSesion() || {};
-  pintar(`<header class="top2">${logoHtml()}<div><b>Ajustes</b><small>DC Soporte ${VERSION}</small></div></header><div class="cuerpo">
-    <div class="tar"><h4>${ic('circle-half', 'regular', 22)}Apariencia</h4><div class="opc" style="margin-top:8px">
-      ${[['oscuro', 'moon', 'Oscuro'], ['claro', 'sun', 'Claro'], ['auto', 'circle-half', 'Automático']].map(([v, i, t]) => `<button data-modo="${v}" class="${modo === v ? 'on' : ''}">${ic(i, 'regular', 24)}${t}</button>`).join('')}</div>
-      <div class="nota">Automático usa el modo que tenga puesto su celular o computador.</div></div>
-    <div class="tar"><h4>${ic('shield-check', 'regular', 22)}Seguridad</h4>
+  return `<div class="tar"><h4>${ic('shield-check', 'regular', 22)}Seguridad</h4>
       <div class="dato"><span>Cuenta</span><b>${esc(s.correo || '—')}</b></div>
       <div class="dato"><span>Cierre por inactividad</span><b>${INACTIVIDAD_MIN} minutos</b></div>
       <div class="dato"><span>Al cerrar el navegador</span><b>Se cierra la sesión</b></div>
       <div class="nota">Cada consulta la revisa el servidor: si la cuenta no es la de la plataforma, no se entrega ningún dato.</div></div>
-    <button class="btn az" id="salir" style="width:100%">${ic('sign-out', 'regular', 20)}Cerrar sesión</button></div>`);
-  $app.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => {
-    try { localStorage.setItem('dcsoporte-tema', b.dataset.modo); } catch (e) { }
-    const m = b.dataset.modo; document.documentElement.setAttribute('data-tema', m === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'claro' : 'oscuro') : m);
+    <button class="btn az" id="salir" style="width:100%">${ic('sign-out', 'regular', 20)}Cerrar sesión</button>`;
+}
+function enlazarAjustes(sec) {
+  const v = document.getElementById('volver-aj'); if (v) v.onclick = () => { E.ajSec = null; vistaAjustes(); };
+  $app.querySelectorAll('[data-aj]').forEach(b => b.onclick = () => { E.ajSec = b.dataset.aj; scrollTo(0, 0); vistaAjustes(); });
+  $app.querySelectorAll('[data-tema-op]').forEach(b => b.onclick = () => {
+    try { localStorage.setItem('dcsoporte-tema', b.dataset.temaOp); } catch (e) { }
+    const m = b.dataset.temaOp; document.documentElement.setAttribute('data-tema', m === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'claro' : 'oscuro') : m);
     vistaAjustes();
   });
-  document.getElementById('salir').onclick = () => salir();
+  const sl = document.getElementById('salir'); if (sl) sl.onclick = () => salir();
+  $app.querySelectorAll('[data-forzar]').forEach(b => b.onclick = () => forzarVersion(Number(b.dataset.forzar), b.dataset.nom));
+  $app.querySelectorAll('[data-tan]').forEach(b => b.onclick = () => { $app.querySelectorAll('[data-tan]').forEach(x => x.classList.toggle('on', x === b)); });
+  if (typeof enlazarAjustesServidor === 'function') enlazarAjustesServidor(sec);
+}
+/* ---------- Ajustes: acciones con el servidor ---------- */
+async function regTrabajador() { if (!('serviceWorker' in navigator)) return null; try { return await navigator.serviceWorker.ready; } catch (e) { return null; } }
+async function endpointPush() {
+  try { if (!('PushManager' in window) || !navigator.serviceWorker.controller) return null; const r = await regTrabajador(); const s = r && await r.pushManager.getSubscription(); return s ? s.endpoint : null; } catch (e) { return null; }
+}
+function llaveB64(b) { const p = '='.repeat((4 - b.length % 4) % 4), r = atob((b + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); }
+async function activarAvisos(si) {
+  const A = E.ajustes;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window))
+    throw new Error(/iPhone|iPad/.test(navigator.userAgent) ? 'En el iPhone, primero agregue DC Soporte a la pantalla de inicio desde Safari y ábralo desde allí.' : 'Este navegador no permite avisos. Use Chrome.');
+  const reg = await regTrabajador(); if (!reg) throw new Error('Recargue la página e intente de nuevo.');
+  let sub = await reg.pushManager.getSubscription();
+  if (!si) { if (sub) { await rpc('dcsoporte_push_suscribir_transaccional', { endpoint: sub.endpoint, activo: false }); await sub.unsubscribe().catch(() => { }); } return; }
+  if (await Notification.requestPermission() !== 'granted') throw new Error('Debe permitir las notificaciones para DC Soporte en el navegador.');
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: llaveB64(A.avisos.vapid) });
+  const j = sub.toJSON();
+  await rpc('dcsoporte_push_suscribir_transaccional', { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, agente: navigator.userAgent.slice(0, 200), activo: true });
+}
+const numPesos = v => Number(String(v || '').replace(/[^\d]/g, '')) || 0;
+async function accionAj(btn, fn, ok) {
+  if (btn) btn.disabled = true;
+  try { await fn(); if (ok) toast(ok); E.ajustes = null; vistaAjustes(); }
+  catch (e) { if (e.message === 'SIN_SESION') return salir(); toast(e.message); if (btn) btn.disabled = false; }
+}
+function enlazarAjustesServidor(sec) {
+  const $ = id => document.getElementById(id);
+  if ($('sw-avisos')) $('sw-avisos').onclick = () => { const si = !E.ajustes.avisos.activo_aqui; accionAj($('sw-avisos'), () => activarAvisos(si), si ? 'Listo. Este equipo recibirá los avisos.' : 'Avisos apagados en este equipo.'); };
+  $app.querySelectorAll('[data-ev]').forEach(c => c.onchange = () => {
+    const ev = [...$app.querySelectorAll('[data-ev]')].filter(x => x.checked).map(x => x.dataset.ev);
+    rpc('dcsoporte_avisos_guardar_transaccional', { eventos: ev }).then(() => { E.ajustes.avisos.eventos = ev; toast('Guardado.'); }).catch(e => toast(e.message));
+  });
+  if ($('probar-aviso')) $('probar-aviso').onclick = () => accionAj($('probar-aviso'), () => rpc('dcsoporte_aviso_prueba_transaccional'), 'Enviado. Debe llegarle en unos segundos.');
+  if ($('an-pub')) $('an-pub').onclick = () => {
+    const tipo = ($app.querySelector('[data-tan].on') || {}).dataset?.tan || 'novedad', titulo = $('an-tit').value.trim(), texto = $('an-txt').value.trim();
+    if (titulo.length < 3) return toast('Escriba un título.');
+    hojaSoporte(`<h4>¿Publicar a todos los despachos?</h4><small>Cada persona lo verá una vez al entrar a la app.</small><div class="tar" style="margin:12px 0"><b>${esc(titulo)}</b><div class="nota">${esc(texto)}</div></div>
+      <div class="acc"><button class="btn az" data-cerrar>Cancelar</button><button class="btn oro" id="h-pub">Publicar</button></div>`, (h, cerrar) => {
+      h.querySelector('#h-pub').onclick = () => { cerrar(); accionAj($('an-pub'), () => rpc('dcsoporte_anuncio_publicar_transaccional', { tipo, titulo, texto }), 'Anuncio publicado.'); };
+    });
+  };
+  $app.querySelectorAll('[data-retirar]').forEach(b => b.onclick = () => accionAj(b, () => rpc('dcsoporte_anuncio_retirar_transaccional', { id: Number(b.dataset.retirar) }), 'Anuncio retirado. Ya nadie más lo verá.'));
+  if ($('sw-mant')) $('sw-mant').onclick = () => {
+    const si = !E.ajustes.mantenimiento.activo, mensaje = $('mt-txt').value.trim();
+    if (!si) return accionAj($('sw-mant'), () => rpc('dcsoporte_mantenimiento_transaccional', { activo: false, mensaje }), 'La app volvió a funcionar normal.');
+    hojaSoporte(`<h4>¿Poner la app en mantenimiento?</h4><small>Todos los despachos verán este mensaje en pantalla completa y no podrán trabajar. Se apaga solo en 2 horas.</small><div class="tar" style="margin:12px 0">${esc(mensaje)}</div>
+      <div class="acc"><button class="btn az" data-cerrar>Cancelar</button><button class="btn rojo-fin" id="h-mant">Encender</button></div>`, (h, cerrar) => {
+      h.querySelector('#h-mant').onclick = () => { cerrar(); accionAj($('sw-mant'), () => rpc('dcsoporte_mantenimiento_transaccional', { activo: true, mensaje }), 'Mantenimiento encendido.'); };
+    });
+  };
+  $app.querySelectorAll('[id^="sw-plan-"]').forEach(b => b.onclick = () => { b.classList.toggle('on'); b.setAttribute('aria-checked', b.classList.contains('on')); });
+  $app.querySelectorAll('[data-pl][data-k^="precio"]').forEach(i => i.onblur = () => { i.value = pesos(numPesos(i.value)); });
+  if ($('pl-guardar')) $('pl-guardar').onclick = () => {
+    const planes = E.ajustes.planes.map(p => { const v = k => $app.querySelector(`[data-pl="${p.id}"][data-k="${k}"]`).value;
+      return { id: p.id, precio_mensual: numPesos(v('precio_mensual')), precio_anual: numPesos(v('precio_anual')), usuarios_incluidos: numPesos(v('usuarios_incluidos')), precio_usuario_adicional: numPesos(v('precio_usuario_adicional')), activo: $('sw-plan-' + p.id).classList.contains('on') }; });
+    accionAj($('pl-guardar'), () => rpc('dcsoporte_planes_guardar_transaccional', { planes }), 'Precios guardados. La página de compra ya usa los nuevos.');
+  };
 }
 /* ---------- Ventas (etapa 2): pagos de Bold, renovaciones, anulaciones y ajustes manuales ---------- */
 const MOV = {
