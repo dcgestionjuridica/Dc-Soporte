@@ -1,7 +1,7 @@
 /* DC Soporte 1.0.0 · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -112,6 +112,12 @@ function pintar(html) {
   $app.querySelectorAll('[data-ir]').forEach(b => b.onclick = () => ir(b.dataset.ir));
   $app.querySelectorAll('[data-desp]').forEach(b => b.onclick = () => abrirDespacho(Number(b.dataset.desp)));
   $app.querySelectorAll('[data-pronto]').forEach(b => b.onclick = () => toast(b.dataset.pronto));
+  const ct = document.getElementById('cambiar-tema');
+  if (ct) ct.onclick = () => {
+    const nuevo = document.documentElement.getAttribute('data-tema') === 'claro' ? 'oscuro' : 'claro';
+    try { localStorage.setItem('dcsoporte-tema', nuevo); } catch (e) { }
+    document.documentElement.setAttribute('data-tema', nuevo); render();
+  };
 }
 function ir(v) { E.vista = v; if (v !== 'despachos') E.det = null; scrollTo(0, 0); render(); }
 function render() {
@@ -133,7 +139,8 @@ function vistaInicio() {
   const T = E.tablero;
   const hoy = new Date().toLocaleDateString('es-CO', { timeZone: ZONA, weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
   const cab = `<header class="cab"><div class="logo">DC</div><div class="marca"><b>DC Soporte<sup>®</sup></b><span>Centro de control</span></div>
-    <div class="der"><button class="btn-ico" data-pronto="Las alertas al celular llegan en la etapa 6." aria-label="Avisos">${ic('bell', 'regular', 26)}${T && T.atencion.length ? '<i></i>' : ''}</button>
+    <div class="der"><button class="btn-ico" id="cambiar-tema" aria-label="Cambiar modo claro u oscuro">${ic(document.documentElement.getAttribute('data-tema') === 'claro' ? 'moon' : 'sun', 'regular', 26)}</button>
+    <button class="btn-ico" data-pronto="Las alertas al celular llegan en la etapa 6." aria-label="Avisos">${ic('bell', 'regular', 26)}${T && T.atencion.length ? '<i></i>' : ''}</button>
     <button class="btn-ico" data-ir="ajustes" aria-label="Mi cuenta">${ic('user-circle', 'regular', 28)}</button></div></header>
     <div class="hola"><small>Bienvenido,</small><h2>Darío Carvajal</h2><div class="rol">${ic('shield-check', 'fill', 15).replace('class="ico"', 'class="ico" style="color:#e7b94a"')}Dueño de la plataforma</div>
     <div class="fecha">${ic('calendar-blank', 'regular', 17)}${esc(hoy.charAt(0).toUpperCase() + hoy.slice(1))}</div></div>`;
