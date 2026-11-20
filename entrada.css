@@ -184,3 +184,17 @@
   .ent .hb-circ{width:96px;height:96px;margin:14px 0 10px}.ent .hb-circ .ico{width:54px;height:54px}
   .ent .hb-nom{font-size:28px}.ent .tarjeta:has(.hb) .sellos{margin-top:16px}
 }
+
+/* 1.6.3 · igual a la entrada de la app comercial: letra más espaciada, campos blancos (sin el azul del autocompletar) y mismos espacios */
+.ent .sub{letter-spacing:.7px;font-size:19px}
+.ent .subraya{margin:18px auto 30px}
+.ent .campo{margin-bottom:18px}
+.ent .campo input{letter-spacing:.5px;font-size:19px;font-weight:500}
+.ent .campo input:-webkit-autofill,.ent .campo input:-webkit-autofill:hover,.ent .campo input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 60px #fff inset;box-shadow:0 0 0 60px #fff inset;-webkit-text-fill-color:#1b2438;caret-color:#1b2438;transition:background-color 9999s}
+.ent .olvido{margin:16px 2px 22px}
+.ent .olvido button{letter-spacing:.4px}
+.ent .btn-ent{letter-spacing:1.2px}
+.ent .sello{letter-spacing:.6px}
+.ent .hb-toque,.ent .hb-toque2,.ent .hb-clave,.ent .hb-cambio,.ent .hb-correo{letter-spacing:.5px}
+@media (max-width:820px){.ent .sub{font-size:15px;letter-spacing:.5px}.ent .campo{margin-bottom:14px}.ent .campo input{font-size:16px}.ent .olvido{margin:12px 2px 16px}}
+@media (min-width:821px){.ent .tarjeta{padding-top:84px}.ent .subraya{margin:20px auto 30px}.ent .campo{margin-bottom:20px;height:54px}.ent .olvido{margin:20px 2px 26px}.ent .sellos{margin-top:30px}}

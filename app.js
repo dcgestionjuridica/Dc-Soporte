@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.6.2';
+const VERSION = '1.6.3';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -234,6 +234,7 @@ function pintar(html) {
   $app.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { pararVivo(); E.vista = 'soporte'; E.det = null; E.casoId = null; E.modo = Number(b.dataset.modo); E.vivo = null; scrollTo(0, 0); render(); });
   const va = document.getElementById('ver-atencion'); if (va) va.onclick = () => { const t = document.getElementById('atencion'); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); t.classList.add('resalta'); setTimeout(() => t.classList.remove('resalta'), 1600); } };
   $app.querySelectorAll('[data-nuevo-desp]').forEach(b => b.onclick = nuevoDespacho);
+  $app.querySelectorAll('[data-reenviar]').forEach(b => b.onclick = () => reenviarEnlace(Number(b.dataset.reenviar), b.dataset.nom));
   const ct = document.getElementById('cambiar-tema');
   if (ct) ct.onclick = () => {
     const nuevo = document.documentElement.getAttribute('data-tema') === 'claro' ? 'oscuro' : 'claro';
@@ -268,7 +269,7 @@ const ATN = { asistencia: ['siren', '#b91c1c'], vence: ['hourglass-medium', '#8a
 function vistaInicio() {
   const T = E.tablero;
   const hoy = new Date().toLocaleDateString('es-CO', { timeZone: ZONA, weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
-  const cab = `<header class="cab">${logoHtml()}<div class="marca"><b>DC Soporte<sup>®</sup></b><span>Centro de control</span></div>
+  const cab = `<header class="cab">${logoHtml()}<div class="marca"><b>DC Soporte<sup>®</sup></b><span>Centro de control</span><i class="ver-app" title="Versión de DC Soporte">Versión ${VERSION}</i></div>
     <div class="hola"><small>Bienvenido,</small><h2>Darío Carvajal</h2><div class="rol">${ic('shield-check', 'fill', 15).replace('class="ico"', 'class="ico" style="color:#e7b94a"')}Dueño de la plataforma</div>
     <div class="fecha">${ic('calendar-blank', 'regular', 17)}${esc(hoy.charAt(0).toUpperCase() + hoy.slice(1))}</div></div>
     <div class="der"><button class="btn-ico" id="cambiar-tema" aria-label="Cambiar modo claro u oscuro">${ic(document.documentElement.getAttribute('data-tema') === 'claro' ? 'moon' : 'sun', 'regular', 26)}</button>
@@ -339,6 +340,7 @@ async function abrirDespacho(id) {
   E.vista = 'despachos'; E.det = id; E.detTab = 'resumen'; E.detalle = null;
   if (!E.despachos) cargar('despachos', () => rpc('dcsoporte_despachos_transaccional')).then(() => E.vista === 'despachos' && vistaDespachos());
   scrollTo(0, 0); vistaDespachos();
+  E.titular = null; rpc('dcsoporte_titular_transaccional', { despacho_id: id }).then(t => { if (E.det === id) { E.titular = t; if (E.detalle && E.detTab === 'resumen' && !t.entro) vistaDespachos(); } }).catch(() => { });
   if (await cargar('detalle', () => rpc('dcsoporte_despacho_transaccional', { id }))) if (E.det === id) vistaDespachos();
 }
 function panelDetalle() {
@@ -363,6 +365,7 @@ function panelDetalle() {
       <div class="k"><div class="l1">${ic('calendar-check', 'regular', 24)}<b>${D.vigente_hasta ? esc(fecha(D.vigente_hasta, { year: '2-digit' })) : 'Sin fecha'}</b></div><span>Vigente hasta</span><em class="${vencido ? 'down' : 'neu'}">${vencido ? 'Vencido' : D.tipo === 'pago' ? 'Renueva con Bold' : 'Sin cobro'}</em></div></div>
       ${D.soporte ? `<div class="aviso">${ic('lock-key', 'fill', 22)}<div>Este despacho le dio permiso de soporte hasta el ${esc(fecha(D.soporte.vence_en))} a las ${esc(hora(D.soporte.vence_en))}</div></div>` : ''}
       ${tarUso(D, 5)}
+      ${E.titular && E.titular.correo && !E.titular.entro && E.titular.despacho !== 0 ? `<div class="aviso aviso-enl">${ic('envelope-simple', 'regular', 22)}<div>El titular (${esc(E.titular.correo)}) todavía no ha entrado.</div><button class="mini-btn" data-reenviar="${Number(D.id)}" data-nom="${esc(D.nombre)}">Reenviar enlace</button></div>` : ''}
       <div class="tar"><h4>${ic('identification-card', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Datos del despacho</h4>
         <div class="dato"><span>Sesiones totales</span><b>${D.sesiones}</b></div><div class="dato"><span>Versión que usa</span><b>${esc(U ? U.version || '—' : '—')}</b></div>
         <div class="dato"><span>Errores en 30 días</span><b>${D.errores_30d}</b></div><div class="dato"><span>Procesos incluidos</span><b>${(D.plan ? D.plan.procesos : 0) + (D.procesos_extra || 0)}</b></div></div>
@@ -849,13 +852,167 @@ async function abrirChatDespacho(desp) {
     };
   });
 }
-function nuevoDespacho() {
-  hojaSoporte(`<h4>Nuevo despacho</h4><small>Hay dos caminos:</small>
-    <div class="dato"><span>Cliente que paga</span><b>Compra solo en la página, con Bold</b></div>
-    <div class="dato"><span>Despacho de prueba (sin cobro)</span><b>App comercial › Configuración › Soporte técnico › Despachos de prueba</b></div>
-    <div class="nota">Crear el despacho de prueba también crea el usuario titular y le envía la contraseña por correo. Eso solo se puede hacer desde la app comercial.</div>
-    <div class="acc"><button class="btn az" data-cerrar>Cerrar</button><button class="btn oro" id="h-abrir-app"><span class="cir">${ic('arrow-square-out', 'bold', 15)}</span>Abrir la app comercial</button></div>`, (h, cerrar) => {
-    h.querySelector('#h-abrir-app').onclick = () => { cerrar(); const w = window.open(APP_COMERCIAL, '_blank'); if (w) w.opener = null; };
+/* ---------- Nuevo despacho (modelo 9, aprobado 20/11/2026) ---------- */
+const FUNC = n => `${SB}/functions/v1/${n}`;
+async function funcion(nombre, cuerpo) {
+  const t = await token();
+  const corte = new AbortController(); const reloj = setTimeout(() => corte.abort(), 45000);
+  try {
+    const r = await fetch(FUNC(nombre), { method: 'POST', headers: { apikey: LLAVE, Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo), signal: corte.signal });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.error) throw new Error(j.error || 'No se pudo completar.');
+    return j;
+  } catch (e) { if (e.name === 'AbortError') throw new Error('El servidor tardó demasiado. Revise en Despachos si quedó creado.'); throw e; }
+  finally { clearTimeout(reloj); }
+}
+const CORREO_OK = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+const TIEMPO_PRUEBA = [[15, '15 días'], [30, '1 mes'], [60, '2 meses'], [90, '3 meses'], [0, 'Sin límite']];
+const TIEMPO_PAGO = [[1, '1 mes'], [3, '3 meses'], [6, '6 meses'], [12, '1 año'], ['otro', 'Otro']];
+const MEDIOS = ['Transferencia', 'Efectivo', 'Nequi', 'Bold', 'Otro'];
+function vencePrevio(dias) { if (!dias) return null; const d = new Date(Date.now() + dias * 86400000); return fecha(d.toISOString()); }
+function diasDeMeses(m) { return m === 12 ? 365 : m === 24 ? 730 : m * 30; }
+function valorSugerido(pl, m) { if (!pl) return 0; return m === 12 ? Number(pl.anual) : m === 24 ? Number(pl.anual) * 2 : Number(pl.mensual) * m; }
+async function nuevoDespacho() {
+  if (!E.planes) { try { E.planes = await rpc('dcsoporte_planes_transaccional'); } catch (e) { if (e.message === 'SIN_SESION') return salir(); return toast('No se pudieron cargar los planes: ' + e.message); } }
+  const P = E.planes;
+  const prueba = P.find(x => x.nombre === 'Prueba'), venta = P.filter(x => x.nombre !== 'Prueba' && x.activo !== false);
+  const N = { tipo: 'prueba', nombre: '', titular: '', correo: '', planPrueba: prueba ? prueba.id : (venta[0] || {}).id, planPago: (venta.find(x => x.nombre === 'Despacho') || venta[0] || {}).id,
+    ue: 0, pe: 0, dias: 30, meses: 12, otro: false, medio: 'Transferencia', monto: null, comp: '' };
+  hojaSoporte('<div id="nd"></div>', (h, cerrar) => {
+    h.classList.add('nd'); h.onclick = null;
+    const caja = h.querySelector('#nd');
+    const leer = () => { const v = id => { const e = caja.querySelector('#' + id); return e ? e.value : null; };
+      if (v('nd-nom') != null) { N.nombre = v('nd-nom'); N.titular = v('nd-tit'); N.correo = v('nd-cor'); }
+      if (v('nd-monto') != null) { N.monto = Number(String(v('nd-monto')).replace(/\D/g, '')) || 0; N.comp = v('nd-comp'); }
+      if (v('nd-meses') != null) N.meses = Math.max(1, Math.min(24, Number(v('nd-meses')) || 1)); };
+    const plan = () => P.find(x => x.id === (N.tipo === 'pago' ? N.planPago : N.planPrueba));
+    const pintarNd = () => {
+      const pago = N.tipo === 'pago', pl = plan();
+      if (pago && N.monto == null) N.monto = valorSugerido(pl, N.meses);
+      const lista = pago ? venta : [prueba, ...venta.filter(x => x.nombre !== 'Independiente')].filter(Boolean);
+      const planes = `<div class="planes">${lista.map(x => `<button data-pl="${x.id}" class="${pl && x.id === pl.id ? 'on' : ''}"><b>${esc(x.nombre)}</b><em>${x.usuarios} ${x.usuarios === 1 ? 'usuario' : 'usuarios'}<br>${Number(x.procesos || 0).toLocaleString('es-CO')} procesos</em><strong>${pago ? pesos(x.mensual) + '/mes' : 'Sin cobro'}</strong></button>`).join('')}</div>`;
+      const mas = (k, icono, t) => `<div class="mas"><span>${ic(icono, 'regular', 18)}${t}</span><span><button data-mas="${k}" data-d="-1" aria-label="Menos">−</button><b>${N[k]}</b><button data-mas="${k}" data-d="1" aria-label="Más">+</button></span></div>`;
+      const chips = (L, val, attr) => `<div class="chips">${L.map(([v, t]) => `<button ${attr}="${v}" class="${String(v) === String(val) ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+      const vence = pago ? vencePrevio(diasDeMeses(N.meses)) : vencePrevio(N.dias);
+      const tiempoPago = N.otro ? 'otro' : N.meses;
+      const der = pago ? `<div class="sub-t">3 · Tiempo pagado</div>${chips(TIEMPO_PAGO, tiempoPago, 'data-mes')}
+        ${N.otro ? `<label class="otro-m">Meses pagados (1 a 24)<input class="campo" id="nd-meses" inputmode="numeric" value="${N.meses}"></label>` : ''}
+        <div class="sub-t">4 · Pago recibido</div>${chips(MEDIOS.map(m => [m, m]), N.medio, 'data-medio')}
+        <div class="fila2" style="margin-top:8px"><input class="campo" id="nd-monto" inputmode="numeric" aria-label="Valor recibido" value="${esc(pesos(N.monto))}"><input class="campo" id="nd-comp" maxlength="40" placeholder="Comprobante (opcional)" value="${esc(N.comp)}"></div>
+        <div class="resumen"><div class="r1"><span>Plan <b>${esc(pl ? pl.nombre : '—')}</b> · ${N.meses === 12 ? '1 año' : N.meses === 1 ? '1 mes' : N.meses + ' meses'} · vence <b>${esc(vence)}</b></span><span class="tot">${esc(pesos(N.monto))}</span></div>Queda en Ventas y en el libro de ingresos. Al titular le llega por correo el enlace para crear su contraseña.</div>`
+        : `<div class="sub-t">3 · Tiempo de prueba</div>${chips(TIEMPO_PRUEBA, N.dias, 'data-dias')}
+        <div class="resumen"><div class="r1"><span>Prueba gratis · plan <b>${esc(pl ? pl.nombre : '—')}</b> · ${vence ? `vence <b>${esc(vence)}</b>` : '<b>sin fecha de vencimiento</b>'}</span><span class="tot">$0</span></div>${vence ? 'Al vencer se detiene hasta que compre un plan. ' : ''}Al titular le llega por correo el enlace para crear su contraseña.</div>`;
+      caja.innerHTML = `<div class="hdr"><h4>Nuevo despacho</h4></div>
+        <div class="tipo"><button data-tipo="prueba" class="${pago ? '' : 'on'}">${ic('flask', 'dt', 30)}<span><b>De prueba</b><em>Sin cobro</em></span></button><button data-tipo="pago" class="${pago ? 'on' : ''}">${ic('credit-card', 'dt', 30)}<span><b>De pago</b><em>Pagó por fuera</em></span></button></div>
+        <div class="cols"><div><div class="sub-t">1 · Datos del despacho</div>
+          <input class="campo" id="nd-nom" maxlength="150" placeholder="Nombre del despacho" value="${esc(N.nombre)}">
+          <input class="campo" id="nd-tit" maxlength="150" placeholder="Nombre del titular" value="${esc(N.titular)}">
+          <input class="campo" id="nd-cor" type="email" maxlength="200" autocomplete="off" placeholder="Correo del titular" value="${esc(N.correo)}">
+          <div class="sub-t">2 · Plan</div>${planes}
+          <div class="fila2 extras" style="margin-top:8px">${mas('ue', 'users', 'Usuarios extra')}${mas('pe', 'folders', 'Procesos extra')}</div></div>
+          <div>${der}</div></div>
+        <div class="nd-err" id="nd-err" role="alert"></div>
+        <div class="acc"><button class="btn az" data-cerrar>Cancelar</button><button class="btn oro" id="nd-crear"><span class="cir">${ic('plus', 'bold', 15)}</span>Crear despacho</button></div>`;
+      caja.querySelectorAll('[data-cerrar]').forEach(x => x.onclick = cerrar);
+      caja.querySelectorAll('[data-tipo]').forEach(x => x.onclick = () => { leer(); N.tipo = x.dataset.tipo; N.monto = null; pintarNd(); });
+      caja.querySelectorAll('[data-pl]').forEach(x => x.onclick = () => { leer(); if (N.tipo === 'pago') { N.planPago = Number(x.dataset.pl); N.monto = null; } else N.planPrueba = Number(x.dataset.pl); pintarNd(); });
+      caja.querySelectorAll('[data-mas]').forEach(x => x.onclick = () => { leer(); const k = x.dataset.mas; N[k] = Math.max(0, Math.min(k === 'ue' ? 500 : 100000, N[k] + Number(x.dataset.d) * (k === 'pe' ? 50 : 1))); pintarNd(); });
+      caja.querySelectorAll('[data-dias]').forEach(x => x.onclick = () => { leer(); N.dias = Number(x.dataset.dias); pintarNd(); });
+      caja.querySelectorAll('[data-mes]').forEach(x => x.onclick = () => { leer(); if (x.dataset.mes === 'otro') { N.otro = true; } else { N.otro = false; N.meses = Number(x.dataset.mes); } N.monto = null; pintarNd(); });
+      caja.querySelectorAll('[data-medio]').forEach(x => x.onclick = () => { leer(); N.medio = x.dataset.medio; pintarNd(); });
+      const mi = caja.querySelector('#nd-meses'); if (mi) mi.onchange = () => { leer(); N.monto = null; pintarNd(); };
+      const mo = caja.querySelector('#nd-monto'); if (mo) mo.oninput = () => { const n = Number(mo.value.replace(/\D/g, '')) || 0; N.monto = n; const t = caja.querySelector('.resumen .tot'); if (t) t.textContent = pesos(n); };
+      caja.querySelector('#nd-crear').onclick = crear;
+    };
+    let creado = null;
+    const crear = async () => {
+      leer();
+      const err = caja.querySelector('#nd-err'), btn = caja.querySelector('#nd-crear');
+      const decir = t => { err.textContent = t || ''; };
+      const nombre = N.nombre.trim(), titular = N.titular.trim(), correo = N.correo.trim().toLowerCase();
+      if (!creado) {
+        if (!nombre) return decir('Escriba el nombre del despacho.');
+        if (!titular) return decir('Escriba el nombre del titular.');
+        if (!CORREO_OK.test(correo)) return decir('El correo del titular no es válido.');
+      }
+      if (N.tipo === 'pago' && !(N.monto > 0)) return decir('Escriba el valor que le pagaron.');
+      btn.disabled = true; btn.lastChild.textContent = 'Creando…'; decir('');
+      try {
+        if (!creado) creado = await funcion('alta-despacho', { nombre, titular, correo, dias: N.tipo === 'prueba' ? N.dias : 0 });
+        const r = await rpc('dcsoporte_despacho_configurar_transaccional', { despacho_id: creado.despacho_id, tipo: N.tipo, plan_id: N.tipo === 'pago' ? N.planPago : N.planPrueba,
+          usuarios_extra: N.ue, procesos_extra: N.pe, dias: N.dias, meses: N.meses, monto: N.monto, medio: N.medio, comprobante: N.comp });
+        E.despachos = null; E.tablero && cargar('tablero', () => rpc('dcsoporte_tablero_transaccional')).then(ok => ok && E.vista === 'inicio' && !document.querySelector('.hoja') && render());
+        cerrar();
+        setTimeout(() => despachoListo({ id: creado.despacho_id, nombre, correo, enlace: creado.enlace, tipo: N.tipo, plan: r.plan, hasta: r.vigente_hasta, monto: r.monto, meses: N.meses, dias: N.dias }), 240);
+      } catch (e) {
+        if (e.message === 'SIN_SESION') return salir();
+        btn.disabled = false; btn.lastChild.textContent = creado ? 'Terminar de configurar' : 'Crear despacho';
+        decir(creado ? `El despacho «${nombre}» quedó creado, pero falta ponerle el plan: ${e.message} Toque «Terminar de configurar».` : e.message);
+      }
+    };
+    pintarNd();
+  });
+}
+/** Ventana «¡Listo!»: enlace corto para que el titular cree su contraseña, enviado también por correo, con «Reenviar». */
+async function despachoListo(R) {
+  const tiempo = R.tipo === 'pago' ? (R.meses === 12 ? '1 año' : R.meses === 1 ? '1 mes' : R.meses + ' meses') : ((TIEMPO_PRUEBA.find(x => x[0] === R.dias) || [0, ''])[1] + ' de prueba');
+  const detalle = R.tipo === 'pago' ? `Plan ${R.plan} · ${tiempo} · vence ${fecha(R.hasta)} · ${pesos(R.monto)} registrado en Ventas` : `Plan ${R.plan} · ${tiempo}${R.hasta ? ' · vence ' + fecha(R.hasta) : ''} · sin cobro`;
+  hojaSoporte(`<div id="nd-ok"></div>`, (h, cerrar) => {
+    h.classList.add('nd');
+    const caja = h.querySelector('#nd-ok');
+    caja.innerHTML = `<div class="ok-g"><div class="c">${ic('check', 'bold', 38)}</div><h4>¡Listo! ${esc(R.nombre)} quedó creado</h4><small>${esc(detalle)}</small></div>` + bloqueEnlace(R.id, R.nombre, R.enlace, true) +
+      `<div class="acc"><button class="btn az" data-cerrar>Cerrar</button><button class="btn oro" id="nd-ver"><span class="cir">${ic('buildings', 'bold', 15)}</span>Ver el despacho</button></div>`;
+    caja.querySelector('[data-cerrar]').onclick = cerrar;
+    caja.querySelector('#nd-ver').onclick = () => { cerrar(); abrirDespacho(R.id); };
+    enlazarEnlace(caja, R.id, R.nombre, R.enlace, true);
+  });
+}
+function bloqueEnlace() {
+  return `<div class="enl">${ic('link', 'regular', 18)}<span id="enl-txt">Preparando el enlace…</span></div>
+    <div class="tres"><button id="enl-copiar" disabled>${ic('copy', 'regular', 22)}Copiar enlace</button><button id="enl-wa" disabled>${ic('whatsapp-logo', 'regular', 22)}WhatsApp</button><button id="enl-correo" disabled>${ic('envelope-simple', 'regular', 22)}Correo</button></div>
+    <div class="nota" id="enl-nota" style="text-align:center"></div>
+    <button class="reenv" id="enl-reenv">${ic('arrows-clockwise', 'bold', 20)}<span><b>Reenviar enlace nuevo</b><em>Si se le venció o no le llegó: sale uno nuevo y el anterior deja de servir</em></span></button>`;
+}
+function enlazarEnlace(caja, id, nombre, largo, enviarCorreo) {
+  let corto = '';
+  const txt = caja.querySelector('#enl-txt'), nota = caja.querySelector('#enl-nota');
+  const bCop = caja.querySelector('#enl-copiar'), bWa = caja.querySelector('#enl-wa'), bCo = caja.querySelector('#enl-correo'), bRe = caja.querySelector('#enl-reenv');
+  const vence = () => { const d = new Date(Date.now() + 12 * 3600000); return `vence ${fecha(new Date().toISOString()) === fecha(d.toISOString()) ? 'hoy' : 'mañana'} a las ${hora(d.toISOString())}`; };
+  const correo = async (auto) => {
+    bCo.disabled = true; const antes = nota.textContent;
+    try { const r = await funcion('enlace-corto', { operacion: 'correo', despacho_id: id, enlace: corto }); nota.textContent = `Sirve 12 horas · ${vence()} · enviado a ${r.correo}`; }
+    catch (e) { nota.textContent = auto ? `Sirve 12 horas · ${vence()} · no se pudo enviar por correo: envíelo por WhatsApp.` : (e.message || 'No se pudo enviar el correo.'); if (!auto && antes) setTimeout(() => { nota.textContent = antes; }, 5000); }
+    bCo.disabled = false;
+  };
+  const preparar = async (l, auto) => {
+    [bCop, bWa, bCo, bRe].forEach(b => b.disabled = true); txt.textContent = 'Preparando el enlace…';
+    try { const r = await funcion('enlace-corto', { operacion: 'acortar', url: l }); corto = r.enlace; } catch (e) { corto = l; }
+    txt.textContent = corto.replace(/^https:\/\//, ''); nota.textContent = `Sirve 12 horas para que el titular cree su contraseña · ${vence()}`;
+    [bCop, bWa, bCo, bRe].forEach(b => b.disabled = false);
+    if (corto === l) bCo.disabled = true;
+    if (auto && corto !== l) correo(true);
+  };
+  bCop.onclick = async () => { try { await navigator.clipboard.writeText(corto); toast('Enlace copiado'); } catch (e) { const r = document.createRange(); r.selectNodeContents(txt); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Enlace seleccionado: cópielo'); } };
+  bWa.onclick = () => { const w = window.open('https://wa.me/?text=' + encodeURIComponent(`Hola. Este es su enlace para crear su contraseña en DC Gestión Jurídica (vale 12 horas): ${corto}`), '_blank'); if (w) w.opener = null; };
+  bCo.onclick = () => correo(false);
+  bRe.onclick = async () => {
+    bRe.disabled = true;
+    try { const r = await funcion('alta-despacho', { operacion: 'enlace', despacho_id: id }); await preparar(r.enlace, true); toast('Enlace nuevo listo'); }
+    catch (e) { if (e.message === 'SIN_SESION') return salir(); nota.textContent = e.message; bRe.disabled = false; }
+  };
+  if (largo) preparar(largo, enviarCorreo);
+  else { txt.textContent = 'Toque «Reenviar enlace nuevo» para generar uno.'; bRe.disabled = false; }
+}
+/** Desde el detalle del despacho, mientras el titular no haya entrado nunca. */
+function reenviarEnlace(id, nombre) {
+  hojaSoporte(`<div id="nd-re"></div>`, (h, cerrar) => {
+    h.classList.add('nd');
+    const caja = h.querySelector('#nd-re');
+    const T = E.titular || {};
+    caja.innerHTML = `<div class="hdr"><h4>Enlace de acceso</h4></div><small>${esc(nombre)} · ${esc(T.nombre || '')} · ${esc(T.correo || '')}<br>El titular todavía no ha entrado. Genere un enlace nuevo para que cree su contraseña.</small>` + bloqueEnlace() +
+      `<div class="acc"><button class="btn az" data-cerrar>Cerrar</button></div>`;
+    caja.querySelector('[data-cerrar]').onclick = cerrar;
+    enlazarEnlace(caja, id, nombre, null, false);
   });
 }
 async function cargarCaso(silencio) {
