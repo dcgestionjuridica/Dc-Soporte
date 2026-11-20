@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -361,18 +361,26 @@ function filaMov(m) {
   return `<div class="fl" ${m.despacho_id ? `data-desp="${Number(m.despacho_id)}" style="cursor:pointer"` : ''}>${ic(icono, 'dt', 26).replace('class="ico"', `class="ico" style="color:${col}"`)}
     <p>${t} · ${esc(m.despacho)}<small>${sub}${m.tipo === 'anulacion' && m.motivo ? ' · ' + esc(m.motivo) : ''}</small></p><div class="monto">${monto}</div></div>`;
 }
-function descargarVentas(V) {
-  const filas = [['Fecha (Colombia)', 'Tipo', 'Despacho', 'Plan', 'Días', 'Monto', 'Medio', 'Referencia Bold', 'Motivo anulación']].concat(V.movimientos.map(m => [
-    new Date(m.fecha).toLocaleString('es-CO', { timeZone: ZONA }), (MOV[m.tipo] || MOV.venta)[2], m.despacho, m.plan || '', m.dias || '', m.monto == null ? '' : Math.round(m.monto), MEDIO[m.medio] || m.medio || '', m.referencia || '', m.motivo || '']));
-  const csv = '﻿' + filas.map(f => f.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  a.download = `ventas-dc-${V.periodo}-${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); toast('Descargué el archivo de ventas (se abre en Excel).');
+function menuDescarga(V) {
+  const h = document.createElement('div'); h.className = 'hoja';
+  h.innerHTML = `<div class="caja" role="dialog" aria-label="Descargar informe"><i class="asa"></i><h4>Descargar informe de ventas</h4><small>${esc(periodoTexto(V))} · ${V.movimientos.length} ${V.movimientos.length === 1 ? 'movimiento' : 'movimientos'}</small>
+    <button data-fmt="pdf">${ic('file-pdf', 'dt', 34).replace('class="ico"', 'class="ico" style="color:#b91c1c"')}<span><b>PDF</b><em>Para ver, imprimir o enviar</em></span>${ic('caret-right', 'bold', 16)}</button>
+    <button data-fmt="xlsx">${ic('microsoft-excel-logo', 'dt', 34).replace('class="ico"', 'class="ico" style="color:#15803d"')}<span><b>Excel</b><em>Tabla con filtros, totales y fórmulas</em></span>${ic('caret-right', 'bold', 16)}</button>
+    <button class="cancelar" data-fmt="">Cancelar</button></div>`;
+  const cerrar = () => { h.classList.remove('on'); setTimeout(() => h.remove(), 220); };
+  h.onclick = e => { if (e.target === h) cerrar(); };
+  h.querySelectorAll('[data-fmt]').forEach(b => b.onclick = async () => {
+    const f = b.dataset.fmt; if (!f) return cerrar();
+    b.disabled = true; b.querySelector('em').textContent = 'Preparando el archivo…';
+    try { await (f === 'pdf' ? informePDF(V) : informeExcel(V)); cerrar(); toast(f === 'pdf' ? 'Listo: el PDF quedó en sus descargas.' : 'Listo: el Excel quedó en sus descargas.'); }
+    catch (e) { console.error(e); b.disabled = false; b.querySelector('em').textContent = 'No se pudo crear. Toque para intentar de nuevo.'; }
+  });
+  document.body.appendChild(h); requestAnimationFrame(() => h.classList.add('on'));
 }
 function vistaVentas() {
   const V = E.ventas && E.ventas.periodo === E.periodo ? E.ventas : null;
   const cab = `<header class="top2"><div class="logo">DC</div><div><b>Ventas</b><small>Pagos procesados por Bold</small></div>
-    <button class="vol" style="margin-left:auto" id="bajar" aria-label="Descargar en Excel">${ic('download-simple', 'regular', 22)}</button></header>`;
+    <button class="vol" style="margin-left:auto" id="bajar" aria-label="Descargar informe en PDF o Excel">${ic('download-simple', 'regular', 22)}</button></header>`;
   const seg = `<div class="seg">${PERIODOS.map(([v, t]) => `<button data-per="${v}" class="${E.periodo === v ? 'on' : ''}">${t}</button>`).join('')}</div>`;
   if (!V) {
     pintar(cab + `<div class="cuerpo">${seg}<div class="cargando"></div></div>`); enlazarVentas(null);
@@ -395,7 +403,7 @@ function vistaVentas() {
 }
 function enlazarVentas(V) {
   $app.querySelectorAll('[data-per]').forEach(b => b.onclick = () => { E.periodo = b.dataset.per; E.verTodosMov = false; vistaVentas(); });
-  const bj = document.getElementById('bajar'); if (bj) bj.onclick = () => V ? descargarVentas(V) : toast('Espere a que carguen las ventas.');
+  const bj = document.getElementById('bajar'); if (bj) bj.onclick = () => V ? menuDescarga(V) : toast('Espere a que carguen las ventas.');
   const vt = document.getElementById('vertodos'); if (vt) vt.onclick = () => { E.verTodosMov = !E.verTodosMov; vistaVentas(); };
   $app.querySelectorAll('.fl[data-desp]').forEach(b => b.onclick = () => { E.vista = 'despachos'; abrirDespacho(Number(b.dataset.desp)); });
 }
