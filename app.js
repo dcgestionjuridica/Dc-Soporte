@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -9,7 +9,7 @@ const INACTIVIDAD_MIN = 15;
 const ZONA = 'America/Bogota';
 
 const $app = document.getElementById('app');
-const E = { vista: 'inicio', filtro: 'todos', busca: '', det: null, detTab: 'resumen', tablero: null, despachos: null, detalle: null, perfil: null, ventas: null, periodo: 'mes', verTodosMov: false, soporte: null, modo: null, vivo: null, todasAcc: false };
+const E = { vista: 'inicio', filtro: 'todos', busca: '', det: null, detTab: 'resumen', tablero: null, despachos: null, detalle: null, perfil: null, ventas: null, periodo: 'mes', verTodosMov: false, soporte: null, modo: null, vivo: null, todasAcc: false, sopTab: 'buzon', buzTab: 'abiertos', buzon: null, caso: null, casoId: null };
 
 /* ---------- utilidades ---------- */
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -161,7 +161,8 @@ function pintar(html) {
   $app.querySelectorAll('[data-ir]').forEach(b => b.onclick = () => ir(b.dataset.ir));
   $app.querySelectorAll('[data-desp]').forEach(b => b.onclick = () => abrirDespacho(Number(b.dataset.desp)));
   $app.querySelectorAll('[data-pronto]').forEach(b => b.onclick = () => toast(b.dataset.pronto));
-  $app.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { pararVivo(); E.vista = 'soporte'; E.det = null; E.modo = Number(b.dataset.modo); E.vivo = null; scrollTo(0, 0); render(); });
+  $app.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => abrirChatDespacho(Number(b.dataset.chat)));
+  $app.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { pararVivo(); E.vista = 'soporte'; E.det = null; E.casoId = null; E.modo = Number(b.dataset.modo); E.vivo = null; scrollTo(0, 0); render(); });
   const ct = document.getElementById('cambiar-tema');
   if (ct) ct.onclick = () => {
     const nuevo = document.documentElement.getAttribute('data-tema') === 'claro' ? 'oscuro' : 'claro';
@@ -169,14 +170,14 @@ function pintar(html) {
     document.documentElement.setAttribute('data-tema', nuevo); render();
   };
 }
-function ir(v) { if (v === 'soporte') { E.modo = null; E.soporte = null; } pararVivo(); E.vista = v; if (v !== 'despachos') E.det = null; scrollTo(0, 0); render(); }
+function ir(v) { if (v === 'soporte') { E.modo = null; E.soporte = null; E.casoId = null; E.buzon = null; } pararVivo(); E.vista = v; if (v !== 'despachos') E.det = null; scrollTo(0, 0); render(); }
 function render() {
   try {
     if (E.vista === 'inicio') return vistaInicio();
     if (E.vista === 'despachos') return vistaDespachos();
     if (E.vista === 'ajustes') return vistaAjustes();
     if (E.vista === 'ventas') return vistaVentas();
-    if (E.vista === 'soporte') return E.modo ? vistaModo() : vistaSoporte();
+    if (E.vista === 'soporte') return E.casoId ? vistaCaso() : E.modo ? vistaModo() : vistaSoporte();
     return vistaPronto(E.vista);
   } catch (e) { console.error(e); pintar(`<div class="cuerpo"><div class="aviso">${ic('warning-circle')}<div>Algo falló al mostrar esta pantalla. Toque Inicio para volver.</div></div></div>`); }
 }
@@ -289,7 +290,7 @@ function panelDetalle() {
         <div class="dato"><span>Sesiones totales</span><b>${D.sesiones}</b></div><div class="dato"><span>Versión que usa</span><b>${esc(U ? U.version || '—' : '—')}</b></div>
         <div class="dato"><span>Errores en 30 días</span><b>${D.errores_30d}</b></div><div class="dato"><span>Procesos incluidos</span><b>${(D.plan ? D.plan.procesos : 0) + (D.procesos_extra || 0)}</b></div></div>
       <div class="acc"><button class="btn oro" ${D.soporte ? `data-modo="${Number(D.id)}"` : `data-pronto="${esc(D.nombre)} no le ha dado permiso de soporte. Pídale que lo autorice en Configuración › Soporte técnico."`}><span class="cir">${ic('headset', 'bold', 15)}</span>Dar soporte</button>
-      <button class="btn az" data-pronto="Escribirle al despacho desde aquí llega con el buzón (etapa 5).">${ic('envelope-simple', 'regular', 20)}Escribirle</button></div>`;
+      <button class="btn az" data-chat="${Number(D.id)}">${ic('envelope-simple', 'regular', 20)}Escribirle</button></div>`;
   } else if (E.detTab === 'actividad') {
     cuerpo = tarRecorrido(D);
   } else if (E.detTab === 'usuarios') {
@@ -448,11 +449,11 @@ let relojVivo = null;
 function pararVivo() { if (relojVivo) { clearInterval(relojVivo); relojVivo = null; } }
 function vistaSoporte() {
   pararVivo();
+  if (E.sopTab === 'buzon') return vistaBuzon();
   const S = E.soporte;
-  const cab = `<header class="top2"><div class="logo">DC</div><div><b>Soporte</b><small>Asistencia remota con permiso del despacho</small></div>
-    <button class="vol" style="margin-left:auto" id="recargar-sop" aria-label="Actualizar">${ic('arrows-clockwise', 'regular', 22)}</button></header>`;
+  const cab = cabSoporte('Asistencia remota con permiso del despacho');
   if (!S) {
-    pintar(cab + `<div class="cuerpo"><div class="cargando"></div></div>`);
+    pintar(cab + `<div class="cuerpo">${segSoporte()}<div class="cargando"></div></div>`); enlazarSegSoporte();
     cargar('soporte', () => rpc('dcsoporte_soporte_transaccional')).then(ok => ok && E.vista === 'soporte' && !E.modo && vistaSoporte());
     return;
   }
@@ -467,9 +468,8 @@ function vistaSoporte() {
   const conP = `<div class="tar"><h4>${icT('lock-key')}Le dieron permiso (${con.length})</h4>${con.length ? con.map(fila).join('') : `<div class="vacio">${icT('lifebuoy')}Ningún despacho tiene el permiso de soporte abierto en este momento.</div>`}</div>`;
   const sinP = sin.length ? `<div class="tar"><h4>${icT('buildings')}Sin permiso (${sin.length})</h4>${sin.map(fila).join('')}</div>` : '';
   const como = `<div class="aviso">${ic('lock-key', 'fill', 22)}<div>Usted solo entra a un despacho cuando el titular o un administrador le da permiso desde su app, en <b>Configuración › Soporte técnico</b>, por 2, 24 o 72 horas. Todo lo que haga queda anotado y ellos lo ven.</div></div>`;
-  const buzon = `<div class="tar"><h4>${icT('chat-circle-text')}Buzón de errores y PQRS</h4><div class="vacio">${icT('bug-beetle', '#b91c1c')}Los errores automáticos, las peticiones y los reclamos llegan aquí en la etapa 5.</div></div>`;
-  pintar(cab + `<div class="cuerpo"><div class="ventas-cols"><div>${como}${conP}</div><div>${sinP}${buzon}</div></div></div>`);
-  const rc = document.getElementById('recargar-sop'); if (rc) rc.onclick = () => { E.soporte = null; vistaSoporte(); };
+  pintar(cab + `<div class="cuerpo">${segSoporte()}<div class="ventas-cols"><div>${como}${conP}</div><div>${sinP}</div></div></div>`);
+  enlazarSegSoporte();
   $app.querySelectorAll('[data-sop]').forEach(b => b.onclick = () => {
     const d = S.despachos.find(x => x.id === Number(b.dataset.sop));
     if (d.minutos == null) return toast(`${d.nombre} no le ha dado permiso de soporte. Pídale que lo autorice en Configuración › Soporte técnico.`);
@@ -531,8 +531,8 @@ function enlazarModo() {
   const v = document.getElementById('volver-sop'); if (v) v.onclick = () => { pararVivo(); E.modo = null; E.soporte = null; vistaSoporte(); };
   const ver = document.getElementById('m-ver'); if (ver) ver.onclick = () => { document.getElementById('en-vivo').scrollIntoView({ behavior: 'smooth', block: 'start' }); cargarVivo(); toast('Mirando en vivo. Se actualiza cada 15 segundos.'); };
   const va = document.getElementById('ver-acc'); if (va) va.onclick = () => { E.todasAcc = !E.todasAcc; vistaModo(); };
-  const ver2 = document.getElementById('m-version'); if (ver2) ver2.onclick = () => toast('Forzar la versión nueva llega con la próxima versión de la app comercial.');
-  const ch = document.getElementById('m-chat'); if (ch) ch.onclick = () => toast('El chat del caso llega con el buzón de soporte (etapa 5).');
+  const ver2 = document.getElementById('m-version'); if (ver2) ver2.onclick = () => forzarVersion(E.modo, E.vivo ? E.vivo.nombre : '');
+  const ch = document.getElementById('m-chat'); if (ch) ch.onclick = () => abrirChatDespacho(E.modo);
   const co = document.getElementById('m-corregir'); if (co) co.onclick = () => {
     const nombre = E.vivo ? E.vivo.nombre : '';
     hojaSoporte(`<h4>¿Entrar a corregir?</h4><small>Va a entrar a <b>${esc(nombre)}</b> con su cuenta de la plataforma. Verá sus datos como ellos los ven, cada cambio queda anotado y el despacho lo ve en su historial. Se abre la app comercial en otra pestaña.</small>
@@ -563,6 +563,120 @@ function enlazarModo() {
       };
     });
   };
+}
+
+/* ---------- Buzón (etapa 5): casos que escribe cada despacho, PQRS, errores automáticos y chat del caso ---------- */
+const TIPO_CASO = {
+  error: ['bug-beetle', '#b91c1c', 'ERROR', 'e-ven'], peticion: ['question', '#1d4ed8', 'PETICIÓN', 'e-prueba'], queja: ['megaphone', '#8a5a00', 'QUEJA', 'e-oro'],
+  reclamo: ['megaphone', '#8a5a00', 'RECLAMO', 'e-oro'], sugerencia: ['lightbulb', '#15803d', 'SUGERENCIA', 'e-pago'], felicitacion: ['star', '#c58a12', 'FELICITACIÓN', 'e-oro']
+};
+const tipoCaso = t => TIPO_CASO[t] || TIPO_CASO.peticion;
+const numCaso = id => '#' + String(id).padStart(4, '0');
+function cabSoporte(sub) {
+  return `<header class="top2"><div class="logo">DC</div><div><b>${E.sopTab === 'buzon' ? 'Buzón de soporte' : 'Soporte'}</b><small>${sub}</small></div>
+    <button class="vol" style="margin-left:auto" id="recargar-sop" aria-label="Actualizar">${ic('arrows-clockwise', 'regular', 22)}</button></header>`;
+}
+function segSoporte() {
+  const B = E.buzon, nuevos = B ? B.casos.filter(c => c.estado !== 'cerrado' && c.sin_leer).length : 0;
+  return `<div class="seg seg-sop"><button data-stab="buzon" class="${E.sopTab === 'buzon' ? 'on' : ''}">${ic('chat-circle-text', 'dt', 18)}Buzón${nuevos ? ` <i class="pt-num">${nuevos}</i>` : ''}</button><button data-stab="asistencia" class="${E.sopTab === 'asistencia' ? 'on' : ''}">${ic('headset', 'dt', 18)}Asistencia remota</button></div>`;
+}
+function enlazarSegSoporte() {
+  $app.querySelectorAll('[data-stab]').forEach(b => b.onclick = () => { E.sopTab = b.dataset.stab; scrollTo(0, 0); vistaSoporte(); });
+  const rc = document.getElementById('recargar-sop'); if (rc) rc.onclick = () => { E.soporte = null; E.buzon = null; vistaSoporte(); };
+}
+function vistaBuzon() {
+  const B = E.buzon, cab = cabSoporte('Casos, errores y PQRS en un lugar');
+  if (!B) {
+    pintar(cab + `<div class="cuerpo">${segSoporte()}<div class="cargando"></div></div>`); enlazarSegSoporte();
+    cargar('buzon', () => rpc('dcsoporte_buzon_transaccional')).then(ok => ok && E.vista === 'soporte' && E.sopTab === 'buzon' && !E.casoId && !E.modo && vistaBuzon());
+    return;
+  }
+  const abiertos = B.casos.filter(c => c.estado !== 'cerrado'), pqrs = abiertos.filter(c => ['peticion', 'queja', 'reclamo'].includes(c.tipo)), cerrados = B.casos.filter(c => c.estado === 'cerrado');
+  const tabs = [['abiertos', 'Abiertos', abiertos.length], ['errores', 'Errores', B.errores.length], ['pqrs', 'PQRS', pqrs.length], ['cerrados', 'Cerrados', cerrados.length]];
+  const seg2 = `<div class="seg">${tabs.map(([v, t, n]) => `<button data-btab="${v}" class="${E.buzTab === v ? 'on' : ''}">${t}${v !== 'cerrados' ? ' ' + n : ''}</button>`).join('')}</div>`;
+  const icT = (n, col, t = 26) => ic(n, 'dt', t).replace('class="ico"', `class="ico" style="color:${col}"`);
+  const filaCaso = c => {
+    const [icono, col, et, cl] = tipoCaso(c.tipo);
+    const dias = c.vence_en && c.estado !== 'cerrado' ? Math.ceil((new Date(c.vence_en) - Date.now()) / 864e5) : null;
+    const sub = `${esc(c.despacho)} · ${esc(hace(c.actualizado_en).toLowerCase())}${dias != null ? ` · ${dias > 0 ? 'vence en ' + dias + (dias === 1 ? ' día' : ' días') : '<b class="rojo">vencido</b>'}` : ''}`;
+    return `<div class="fl caso" data-caso="${Number(c.id)}">${icT(icono, col)}<p>${numCaso(c.id)} · ${esc(c.asunto)}<small>${sub}</small>${c.ultimo ? `<small class="ult">${esc(c.ultimo)}</small>` : ''}</p>
+      <div class="lado">${c.urgente ? '<span class="et e-ven">URGENTE</span>' : `<span class="et ${cl}">${et}</span>`}${c.sin_leer ? `<i class="pt-num">${c.sin_leer}</i>` : c.estado === 'respondido' ? '<small class="resp">Respondido</small>' : ''}</div></div>`;
+  };
+  const filaError = e => `<div class="fl">${icT('bug-beetle', '#b91c1c')}<p>${esc(e.mensaje || e.tipo)}<small>${e.despachos} ${e.despachos === 1 ? 'despacho' : 'despachos'}, ${e.veces} ${e.veces === 1 ? 'vez' : 'veces'}${e.version ? ' · ' + esc(e.version) : ''}${e.pantalla ? ' · ' + esc(nomMod(e.pantalla)[0]) : ''}</small><small class="ult">${esc((e.nombres || []).join(', '))} · ${esc(hace(e.ultima).toLowerCase())}</small></p><span class="et e-ven">${esc(String(e.tipo || 'ERROR').replace(/_/g, ' ').slice(0, 14))}</span></div>`;
+  let lista, vacio;
+  if (E.buzTab === 'errores') { lista = B.errores.map(filaError); vacio = 'No hubo errores automáticos en los últimos 7 días.'; }
+  else { const L = E.buzTab === 'pqrs' ? pqrs : E.buzTab === 'cerrados' ? cerrados : abiertos; lista = L.map(filaCaso); vacio = E.buzTab === 'cerrados' ? 'No hay casos cerrados en los últimos 60 días.' : 'No hay casos abiertos. Cuando un despacho escriba desde su app, aparece aquí.'; }
+  const tarjeta = `<div class="tar buz">${lista.length ? lista.join('') : `<div class="vacio">${icT('check-circle', '#15803d', 24)}${vacio}</div>`}</div>`;
+  const nota = E.buzTab === 'errores' ? `<div class="aviso">${ic('bug-beetle', 'dt', 22)}<div>Estos errores los anota la app sola, sin que el despacho escriba nada. Se agrupan por mensaje (últimos 7 días).</div></div>`
+    : E.buzTab === 'pqrs' ? `<div class="aviso">${ic('hourglass-medium', 'dt', 22)}<div>Las peticiones, quejas y reclamos deben responderse dentro de 15 días hábiles. Cada caso muestra cuánto le queda.</div></div>` : '';
+  pintar(cab + `<div class="cuerpo">${segSoporte()}${seg2}${nota}${tarjeta}</div>`);
+  enlazarSegSoporte();
+  $app.querySelectorAll('[data-btab]').forEach(b => b.onclick = () => { E.buzTab = b.dataset.btab; vistaBuzon(); });
+  $app.querySelectorAll('[data-caso]').forEach(b => b.onclick = () => abrirCaso(Number(b.dataset.caso)));
+}
+function abrirCaso(id) { pararVivo(); E.vista = 'soporte'; E.casoId = id; E.caso = null; scrollTo(0, 0); render(); }
+async function abrirChatDespacho(desp) {
+  if (!E.buzon) await cargar('buzon', () => rpc('dcsoporte_buzon_transaccional'));
+  const c = E.buzon && E.buzon.casos.find(x => x.despacho_id === desp && x.estado !== 'cerrado');
+  if (c) return abrirCaso(c.id);
+  toast('Este despacho no tiene casos abiertos. Cuando escriba desde su app, el chat aparece aquí.');
+}
+async function cargarCaso(silencio) {
+  const id = E.casoId;
+  try { const r = await rpc('dcsoporte_caso_transaccional', { id }); if (E.casoId !== id) return;
+    const cambio = !E.caso || E.caso.mensajes.length !== r.mensajes.length || E.caso.estado !== r.estado; E.caso = r;
+    if (E.vista === 'soporte' && (cambio || !silencio) && !document.querySelector('.hoja')) vistaCaso(); }
+  catch (e) { if (e.message === 'SIN_SESION') return salir(); if (!silencio) toast('No se pudo cargar: ' + e.message); }
+}
+function vistaCaso() {
+  const C = E.caso && E.caso.id === E.casoId ? E.caso : null;
+  const volver = `<button class="vol" id="volver-caso" aria-label="Volver">${ic('caret-left', 'bold', 20)}</button>`;
+  if (!relojVivo) { cargarCaso(); relojVivo = setInterval(() => cargarCaso(true), 15000); }
+  if (!C) { pintar(`<header class="top2">${volver}<div><b>Caso</b></div></header><div class="cuerpo"><div class="cargando"></div></div>`); enlazarCaso(); return; }
+  const [icono, col, et, cl] = tipoCaso(C.tipo);
+  const borrador = (document.getElementById('resp') || {}).value || E.borrador || '';
+  const cab = `<header class="top2">${volver}<div style="min-width:0"><b class="tit1">${numCaso(C.id)} · ${esc(C.asunto)}</b><small class="sub2">${esc(C.despacho)}${C.modulo ? ' · ' + esc(nomMod(C.modulo)[0]) : ''}${C.version ? ' · v' + esc(C.version) : ''}</small></div>
+    <span class="et ${C.estado === 'cerrado' ? 'e-gris' : cl}" style="margin-left:auto">${C.estado === 'cerrado' ? 'CERRADO' : et}</span></header>`;
+  const dias = C.vence_en && C.estado !== 'cerrado' ? Math.ceil((new Date(C.vence_en) - Date.now()) / 864e5) : null;
+  const avisos = dias != null ? `<div class="aviso">${ic('hourglass-medium', 'dt', 22)}<div>${dias > 0 ? `Debe responder este caso en los próximos <b>${dias} ${dias === 1 ? 'día' : 'días'}</b>.` : '<b>El plazo para responder este caso ya venció.</b> Respóndalo cuanto antes.'}</div></div>` : '';
+  let ultDia = '';
+  const burbujas = C.mensajes.map(m => {
+    const dia = fecha(m.fecha), sep = dia !== ultDia ? `<div class="dia">${esc(dia === fecha(new Date()) ? 'Hoy' : dia)}</div>` : ''; ultDia = dia;
+    return `${sep}<div class="msj ${m.autor === 'soporte' ? 'yo' : ''}"><div class="bur"><b>${esc(m.nombre || '')}</b>${esc(m.texto).replace(/\n/g, '<br>')}<small>${esc(hora(m.fecha))}${m.autor === 'soporte' ? (m.leido ? ' · Leído' : ' · Enviado') : ''}</small></div></div>`;
+  }).join('');
+  const chat = `<div class="tar chat"><h4>${ic(icono, 'dt', 22).replace('class="ico"', `class="ico" style="color:${col}"`)}Chat del caso<a>${C.estado === 'cerrado' ? 'Cerrado' : 'Se actualiza solo'}</a></h4><div class="msjs" id="msjs">${burbujas}</div></div>`;
+  const escribir = `<div class="escribir"><textarea id="resp" rows="2" maxlength="2000" placeholder="Escriba su respuesta…">${esc(borrador)}</textarea><button id="enviar" aria-label="Enviar">${ic('paper-plane-tilt', 'dt', 24)}</button></div>`;
+  const acc = `<div class="acc">${C.soporte ? `<button class="btn oro" data-modo="${Number(C.despacho_id)}"><span class="cir">${ic('headset', 'bold', 15)}</span>Dar soporte</button>` : `<button class="btn oro" data-pronto="${esc(C.despacho)} no le ha dado permiso de soporte. Pídaselo en el chat: Configuración › Soporte técnico."><span class="cir">${ic('headset', 'bold', 15)}</span>Dar soporte</button>`}
+    <button class="btn az" id="cerrar-caso">${ic(C.estado === 'cerrado' ? 'arrow-u-up-left' : 'check-circle', C.estado === 'cerrado' ? 'regular' : 'dt', 20)}${C.estado === 'cerrado' ? 'Reabrir' : 'Cerrar caso'}</button></div>`;
+  pintar(cab + `<div class="cuerpo"><div class="ventas-cols caso-cols"><div>${avisos}${chat}</div><div>${escribir}${acc}</div></div></div>`);
+  const ms = document.getElementById('msjs'); if (ms) ms.scrollTop = ms.scrollHeight;
+  enlazarCaso();
+}
+function enlazarCaso() {
+  const v = document.getElementById('volver-caso'); if (v) v.onclick = () => { pararVivo(); E.casoId = null; E.caso = null; E.buzon = null; E.borrador = ''; vistaSoporte(); };
+  const ta = document.getElementById('resp'); if (ta) ta.oninput = () => { E.borrador = ta.value; };
+  const en = document.getElementById('enviar'); if (en) en.onclick = async () => {
+    const t = ta.value.trim(); if (!t) { ta.focus(); return; }
+    en.disabled = true;
+    try { await rpc('dcsoporte_caso_responder_transaccional', { id: E.casoId, texto: t }); E.borrador = ''; ta.value = ''; await cargarCaso(); toast('Respuesta enviada. El despacho la ve en su app.'); }
+    catch (e) { en.disabled = false; toast('No se pudo enviar: ' + e.message); }
+  };
+  const cc = document.getElementById('cerrar-caso'); if (cc) cc.onclick = async () => {
+    const cerrar = E.caso.estado !== 'cerrado', t = (ta && ta.value.trim()) || '';
+    cc.disabled = true;
+    try { await rpc('dcsoporte_caso_responder_transaccional', { id: E.casoId, texto: t, estado: cerrar ? 'cerrado' : 'abierto' }); E.borrador = ''; await cargarCaso(); toast(cerrar ? 'Caso cerrado.' : 'Caso reabierto.'); }
+    catch (e) { cc.disabled = false; toast('No se pudo: ' + e.message); }
+  };
+}
+function forzarVersion(id, nombre) {
+  hojaSoporte(`<h4>¿Forzar la versión nueva?</h4><small>En el próximo minuto, la app de <b>${esc(nombre)}</b> se recarga sola con la versión nueva en todos sus equipos abiertos. No se cierra la sesión. Úselo solo si es urgente: la app ya se actualiza sola cuando cada persona sale y vuelve a entrar.</small>
+    <button class="hb" id="h-forzar">${ic('arrows-clockwise', 'dt', 30).replace('class="ico"', 'class="ico" style="color:#c58a12"')}<span><b>Sí, forzar ahora</b><em>Queda anotado en el historial del despacho</em></span>${ic('caret-right', 'bold', 16)}</button>
+    <button class="cancelar" data-cerrar>Cancelar</button>`, (h, cerrar) => {
+    h.querySelector('#h-forzar').onclick = async () => {
+      try { const r = await rpc('dcsoporte_forzar_version_transaccional', { id }); cerrar(); toast(r.conectados ? `Listo. ${r.conectados} ${r.conectados === 1 ? 'equipo se recarga' : 'equipos se recargan'} en el próximo minuto.` : 'Listo. Nadie está conectado ahora; entrarán ya con la versión nueva.'); }
+      catch (e) { toast('No se pudo: ' + e.message); }
+    };
+  });
 }
 
 function vistaPronto(v) {

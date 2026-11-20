@@ -272,3 +272,29 @@ html[data-tema="claro"] #app:after{background:radial-gradient(circle,rgba(231,18
 }
 .pt-verde{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:5px;vertical-align:0;box-shadow:0 0 0 2px rgba(34,197,94,.2)}
 .top2 .sub2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3}
+
+/* ---------- 1.4 · Buzón y chat del caso (modelo 4) ---------- */
+.seg-sop button{display:flex;align-items:center;justify-content:center;gap:6px}
+.seg-sop .ico{flex:none}
+.seg + .seg{margin-top:-2px}
+.pt-num{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#c62828;color:#fff;font-size:11px;font-weight:800;font-style:normal}
+.buz .fl.caso{cursor:pointer;align-items:flex-start}
+.buz .fl > .ico{margin-top:2px}
+.buz .fl p small.ult{color:var(--tarT2);font-weight:500;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.buz .lado{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none}
+.buz .lado .resp{font-size:11px;color:var(--verde);font-weight:700}
+.top2 .tit1{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:18px;line-height:1.25}
+.chat .msjs{max-height:min(52vh,520px);overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:6px 2px 4px;overscroll-behavior:contain}
+.chat .dia{align-self:center;font-size:11px;font-weight:700;color:var(--tarT2);background:rgba(15,30,61,.06);padding:3px 10px;border-radius:10px;margin:4px 0}
+.msj{display:flex}.msj.yo{justify-content:flex-end}
+.msj .bur{max-width:82%;background:#eef2fa;color:#0f1e3d;border-radius:16px 16px 16px 4px;padding:9px 12px;font-size:14px;line-height:1.4;box-shadow:0 1px 2px rgba(15,30,61,.08);overflow-wrap:anywhere}
+.msj.yo .bur{background:linear-gradient(180deg,#14306e,#0b1d4a);color:#fff;border-radius:16px 16px 4px 16px;border:1px solid rgba(231,185,74,.55)}
+.msj .bur b{display:block;font-size:11.5px;color:#8a5a00;margin-bottom:2px}.msj.yo .bur b{color:var(--oro)}
+.msj .bur small{display:block;text-align:right;font-size:10.5px;opacity:.7;margin-top:3px}
+.escribir{display:flex;gap:10px;align-items:flex-end;background:var(--tar);border-radius:18px;padding:10px;box-shadow:var(--tar-sombra);margin-bottom:12px}
+.escribir textarea{flex:1;border:1.5px solid #d6dce8;border-radius:14px;padding:10px 12px;font:inherit;font-size:15px;color:#0f1e3d;background:#fff;resize:none;outline:none;min-height:46px;max-height:140px}
+.escribir textarea:focus{border-color:var(--oro);box-shadow:0 0 0 3px rgba(231,185,74,.25)}
+.escribir button{width:50px;height:50px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#f3d27a,#d9a53a);color:#0f1e3d;box-shadow:0 6px 16px rgba(231,185,74,.35)}
+.escribir button:disabled{opacity:.6}
+@media (min-width:900px){ .caso-cols{grid-template-columns:1.4fr 1fr} .chat .msjs{max-height:calc(100vh - 230px)} }
+@media (min-width:560px) and (max-width:899px){ .msj .bur{font-size:16px} .chat .msjs{max-height:calc(100vh - 470px)} }
