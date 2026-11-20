@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.6.5';
+const VERSION = '1.6.6';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -75,7 +75,7 @@ async function salir(motivo) {
   const s = leerSesion();
   if (s) fetch(`${SB}/auth/v1/logout`, { method: 'POST', headers: { apikey: LLAVE, Authorization: 'Bearer ' + s.t } }).catch(() => { });
   pararVivo(); try { sessionStorage.removeItem(CLAVE_USO); } catch (e) { } document.querySelectorAll('.hoja').forEach(h => h.remove());
-  borrarSesion(); Object.assign(E, { tablero: null, despachos: null, detalle: null, det: null, ventas: null, vista: 'inicio', soporte: null, modo: null, vivo: null, buzon: null, caso: null, casoId: null, ajustes: null, ajSec: null, borrador: '' });
+  pilaNav = []; borrarSesion(); Object.assign(E, { tablero: null, despachos: null, detalle: null, det: null, ventas: null, vista: 'inicio', soporte: null, modo: null, vivo: null, buzon: null, caso: null, casoId: null, ajustes: null, ajSec: null, borrador: '' });
   pintarEntrada(motivo);
 }
 let reloj = null, vigilando = false;
@@ -223,10 +223,60 @@ function nav() {
   return `<nav class="nav"><div class="base">${it('despachos', 'buildings', 'Despachos')}${it('ventas', 'chart-line-up', 'Ventas')}<div class="hueco"></div>${it('soporte', 'lifebuoy', 'Soporte')}${it('ajustes', 'gear-six', 'Ajustes')}</div>
     <button class="centro ${on ? 'on' : ''}" data-ir="inicio" aria-label="Inicio">${ic('house', on ? 'fill' : 'bold', 32)}</button><span class="lab ${on ? 'on' : ''}">Inicio</span></nav>`;
 }
+/* 1.6.6 · Botón o gesto de regresar del celular y la tableta: vuelve a la pantalla anterior (o cierra la ventana
+   abierta). En Inicio, sin nada abierto, avisa; un segundo toque seguido sí sale de la aplicación. */
+const CAMPOS_NAV = ['vista', 'det', 'detTab', 'ajSec', 'sopTab', 'buzTab', 'modo', 'casoId'];
+let pilaNav = [], restaurando = false, guardiaPuesta = false, saliendoNav = 0, relojSalida = null;
+const llaveNav = o => CAMPOS_NAV.map(k => o[k] == null ? '' : o[k]).join('|');
+function ponerGuardia() { if (guardiaPuesta) return; try { history.pushState({ dcs: 1 }, ''); guardiaPuesta = true; } catch (e) { } }
+function anotarPantalla() {
+  ponerGuardia();
+  const foto = {}; CAMPOS_NAV.forEach(k => foto[k] = E[k] == null ? null : E[k]);
+  const tope = pilaNav[pilaNav.length - 1];
+  if (tope && llaveNav(tope) === llaveNav(foto)) return;
+  if (restaurando) { if (tope) Object.assign(tope, foto); return; }
+  if (tope) tope.y = scrollY;
+  // Volver a Inicio desde el menú deja la pila limpia: atrás desde Inicio ya pide salir.
+  if (foto.vista === 'inicio') pilaNav = [];
+  pilaNav.push(foto); if (pilaNav.length > 40) pilaNav.shift();
+}
+function cerrarHojaAbierta() {
+  const hs = [...document.querySelectorAll('.hoja')]; if (!hs.length) return false;
+  const h = hs[hs.length - 1], c = h.querySelector('[data-cerrar]');
+  if (c) c.click(); else { h.classList.remove('on'); setTimeout(() => h.remove(), 220); }
+  return true;
+}
+addEventListener('popstate', () => {
+  guardiaPuesta = false;
+  if (!leerSesion() || $app.classList.contains('modo-ent')) return;   // en la entrada, atrás sale normal
+  if (cerrarHojaAbierta()) { ponerGuardia(); return; }
+  if (pilaNav.length > 1) {
+    pilaNav.pop(); const ant = pilaNav[pilaNav.length - 1];
+    const cambiaDesp = ant.det && ant.det !== E.det, cambiaCaso = ant.casoId && ant.casoId !== E.casoId, cambiaModo = ant.modo !== E.modo;
+    if (E.modo && cambiaModo) pararVivo();
+    CAMPOS_NAV.forEach(k => E[k] = ant[k]);
+    if (cambiaModo) E.vivo = null;
+    if (cambiaCaso) E.caso = null;
+    restaurando = true;
+    if (cambiaDesp) {
+      const tab = ant.detTab;
+      abrirDespacho(ant.det).then(() => { if (E.det === ant.det && tab && E.detTab !== tab) { E.detTab = tab; render(); } }).finally(() => { restaurando = false; });
+    } else { try { render(); } finally { restaurando = false; } }
+    requestAnimationFrame(() => scrollTo(0, ant.y || 0));
+    ponerGuardia(); return;
+  }
+  if (E.vista !== 'inicio') { ir('inicio'); ponerGuardia(); return; }
+  // En Inicio: primer toque avisa; si en 2,5 segundos no hay otro, se vuelve a cuidar el botón.
+  if (Date.now() - saliendoNav < 2500) return;
+  saliendoNav = Date.now();
+  toast('Toque otra vez «atrás» para salir de DC Soporte.');
+  clearTimeout(relojSalida); relojSalida = setTimeout(() => { saliendoNav = 0; if (leerSesion()) ponerGuardia(); }, 2500);
+});
 function pintar(html) {
   if (apagarEntrada) { apagarEntrada(); apagarEntrada = null; }
   $app.classList.remove('modo-ent');
   $app.innerHTML = html + nav();
+  anotarPantalla();
   $app.querySelectorAll('[data-ir]').forEach(b => b.onclick = () => ir(b.dataset.ir));
   $app.querySelectorAll('[data-desp]').forEach(b => b.onclick = () => abrirDespacho(Number(b.dataset.desp)));
   $app.querySelectorAll('[data-pronto]').forEach(b => b.onclick = () => toast(b.dataset.pronto));
