@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.1.1';
+const VERSION = '1.2.0';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -282,14 +282,14 @@ function panelDetalle() {
       <div class="k"><div class="l1">${ic('users-three', 'regular', 24)}<b>${activos} de ${lim || '—'}</b></div><span>Usuarios del plan</span><em class="neu">${esc(Object.entries(roles).map(([r, n]) => `${n} ${r}`).join(' · ') || 'Sin usuarios')}</em></div>
       <div class="k"><div class="l1">${ic('calendar-check', 'regular', 24)}<b>${D.vigente_hasta ? esc(fecha(D.vigente_hasta, { year: '2-digit' })) : 'Sin fecha'}</b></div><span>Vigente hasta</span><em class="${vencido ? 'down' : 'neu'}">${vencido ? 'Vencido' : D.tipo === 'pago' ? 'Renueva con Bold' : 'Sin cobro'}</em></div></div>
       ${D.soporte ? `<div class="aviso">${ic('lock-key', 'fill', 22)}<div>Este despacho le dio permiso de soporte hasta el ${esc(fecha(D.soporte.vence_en))} a las ${esc(hora(D.soporte.vence_en))}</div></div>` : ''}
-      ${tarModulos(D, 5)}
+      ${tarUso(D, 5)}
       <div class="tar"><h4>${ic('identification-card', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Datos del despacho</h4>
         <div class="dato"><span>Sesiones totales</span><b>${D.sesiones}</b></div><div class="dato"><span>Versión que usa</span><b>${esc(U ? U.version || '—' : '—')}</b></div>
         <div class="dato"><span>Errores en 30 días</span><b>${D.errores_30d}</b></div><div class="dato"><span>Procesos incluidos</span><b>${(D.plan ? D.plan.procesos : 0) + (D.procesos_extra || 0)}</b></div></div>
       <div class="acc"><button class="btn oro" data-pronto="Entrar a dar soporte desde aquí llega en la etapa 4."><span class="cir">${ic('headset', 'bold', 15)}</span>Dar soporte</button>
       <button class="btn az" data-pronto="Escribirle al despacho desde aquí llega en la etapa 4.">${ic('envelope-simple', 'regular', 20)}Escribirle</button></div>`;
   } else if (E.detTab === 'actividad') {
-    cuerpo = tarModulos(D, 50) + `<div class="aviso">${ic('clock-countdown', 'regular', 22)}<div>El recorrido pantalla por pantalla, con el tiempo en cada módulo, llega en la etapa 3. Por ahora se ven las acciones que la app ya anota.</div></div>`;
+    cuerpo = tarRecorrido(D);
   } else if (E.detTab === 'usuarios') {
     cuerpo = `<div class="tar"><h4>${ic('users-three', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Usuarios (${D.usuarios.length})</h4>${D.usuarios.length ? D.usuarios.map(u => `
       <div class="fl">${ic(u.titular ? 'crown' : 'user-gear', 'dt', 26).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}<p>${esc(u.nombre)}${u.titular ? ' · titular' : ''}<small>${esc(u.rol)} · ${esc(u.correo || '')}<br>${u.ultima ? 'Última vez ' + esc(hace(u.ultima).toLowerCase()) : 'Nunca ha entrado'}${u.equipos && u.equipos.length ? ' · ' + esc(u.equipos.join(', ')) : ''}</small></p>
@@ -300,6 +300,35 @@ function panelDetalle() {
       <b style="font-size:13px;${p.anulado ? 'color:#b91c1c;text-decoration:line-through' : ''}">${p.monto > 0 ? pesos(p.monto) : '—'}</b></div>`).join('') : `<div class="vacio">Todavía no tiene pagos.</div>`}</div>`;
   }
   return cab + tabs + cuerpo;
+}
+const NOMBRE_MODULO = {
+  DASHBOARD: ['Inicio', 'house'], SEGUIMIENTO_JUDICIAL: ['Vigilancia judicial', 'binoculars'], AVISOS_DEL_DIA: ['Avisos del día', 'megaphone'],
+  SIMULADOR_LIQUIDACION: ['Simulador de liquidación', 'calculator'], NUEVO_CLIENTE: ['Nuevo cliente', 'identification-card'], CLIENTES: ['Clientes', 'identification-card'],
+  MENSAJES_CLIENTES: ['Mensajes de clientes', 'chat-circle-text'], CLIENTES_PORTAL: ['Portal del cliente', 'identification-card'], CARTERA: ['Cartera', 'coins'],
+  CONTABILIDAD: ['Contabilidad', 'calculator'], COTIZACIONES: ['Cotizaciones', 'receipt'], CONTRATOS: ['Contratos', 'receipt'], EXPEDIENTES: ['Expedientes', 'folder-open'],
+  HISTORIA_JURIDICA: ['Historia jurídica', 'folder-open'], TERMINOS_JURIDICOS: ['Términos', 'hourglass-medium'], CENTRO_VENCIMIENTOS: ['Vencimientos', 'hourglass-medium'],
+  CALENDARIO_AGENDA: ['Calendario y agenda', 'calendar-check'], ALERTAS_RIESGO: ['Alertas de riesgo', 'siren'], LECTURA_DOCUMENTOS: ['Lectura de documentos', 'folder-open'],
+  ASISTENTE_JURIDICO: ['Doc Dai', 'chat-circle-text'], CONSULTA_RAMA_JUDICIAL: ['Consulta Rama Judicial', 'binoculars'], FIRMA_ELECTRONICA: ['Firma y solicitudes', 'receipt'],
+  TAREAS_RECORDATORIOS: ['Tareas', 'list-checks'], ADMIN_PLANTILLAS_JURIDICAS: ['Plantillas jurídicas', 'receipt'], DOCUMENTOS: ['Documentos', 'folder-open'],
+  AUDITORIA: ['Auditoría', 'list-checks'], CONFIGURACION: ['Configuración', 'user-gear'], INSOLVENCIA: ['Insolvencia', 'coins'], INFORMES_VIGILANCIA: ['Informes de vigilancia', 'binoculars'],
+  ENVIO_CORREO_CERTIFICADO: ['Correo certificado', 'paper-plane-tilt'], ADMIN_DC: ['Administración DC', 'crown']
+};
+const nomMod = m => (NOMBRE_MODULO[m] || [String(m || 'General').toLowerCase().replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()), 'folder-open']);
+const tiempoMod = seg => { const m = Math.round((seg || 0) / 60); if (m < 1) return 'menos de 1 min'; if (m < 60) return m + ' min'; const h = Math.floor(m / 60), r = m % 60; return h + ' h' + (r ? ' ' + r + ' min' : ''); };
+function tarUso(D, n) {
+  const U = D.uso_modulos || [];
+  if (!U.length) return tarModulos(D, n);
+  const M = U.slice(0, n), max = Math.max(1, ...M.map(m => m.segundos));
+  return `<div class="tar"><h4>${ic('list-magnifying-glass', 'regular', 22)}Módulos más usados (30 días)${n < 50 ? `<a data-tab="actividad">Recorrido${ic('caret-right', 'bold', 12)}</a>` : ''}</h4>
+    ${M.map(m => { const [t, i] = nomMod(m.modulo); return `<div class="mo"><span class="n">${ic(i, 'dt', 20).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}${esc(t)}</span><div class="barra"><i style="width:${Math.max(3, Math.round(m.segundos * 100 / max))}%"></i></div><b>${esc(tiempoMod(m.segundos))}</b></div>`; }).join('')}</div>`;
+}
+function tarRecorrido(D) {
+  const U = D.uso_modulos || [], H = D.uso_hoy || [];
+  const ahora = D.modulo_actual ? `<div class="aviso">${ic('circle', 'fill', 12).replace('class="ico"', 'class="ico" style="color:#22c55e"')}<div>Conectado ahora en <b>${esc(nomMod(D.modulo_actual)[0])}</b></div></div>` : '';
+  const hoy = `<div class="tar"><h4>${ic('clock-countdown', 'regular', 22)}Recorrido de hoy</h4>${H.length ? H.map(h => { const [t, i] = nomMod(h.modulo); return `<div class="fl">${ic(i, 'dt', 24).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}<p>${esc(t)}<small>${esc(h.usuario || 'Usuario')} · último uso ${esc(hora(h.ultima))}</small></p><div class="h">${esc(tiempoMod(h.segundos))}</div></div>`; }).join('') : `<div class="vacio">Hoy todavía no ha usado ningún módulo.</div>`}</div>`;
+  const tabla = U.length ? `<div class="tar"><h4>${ic('list-magnifying-glass', 'regular', 22)}Tiempo por módulo (30 días)</h4>${U.map(m => { const [t, i] = nomMod(m.modulo); return `<div class="fl">${ic(i, 'dt', 24).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}<p>${esc(t)}<small>${m.visitas} ${m.visitas === 1 ? 'entrada' : 'entradas'} · ${m.usuarios} ${m.usuarios === 1 ? 'usuario' : 'usuarios'} · último uso ${esc(hace(m.ultima).toLowerCase())}</small></p><div class="monto">${esc(tiempoMod(m.segundos))}</div></div>`; }).join('')}</div>`
+    : `<div class="aviso">${ic('clock-countdown', 'regular', 22)}<div>El tiempo en cada módulo se empieza a contar desde la versión 1.7.43 de la app comercial. Abajo se ven las acciones que la app ya anotaba.</div></div>`;
+  return ahora + hoy + tabla + tarModulos(D, 50);
 }
 function tarModulos(D, n) {
   const M = D.modulos.slice(0, n); const max = Math.max(1, ...M.map(m => m.acciones));
