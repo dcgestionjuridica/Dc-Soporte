@@ -1,7 +1,7 @@
-/* DC Soporte 1.0.0 · centro de control de la plataforma DC Gestión Jurídica
+/* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.0.2';
+const VERSION = '1.0.3';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -76,28 +76,75 @@ function vigilarInactividad() {
   reiniciar();
 }
 
-/* ---------- entrada ---------- */
+/* ---------- entrada (copia de la entrada de la web de DC Gestión Jurídica) ---------- */
+let apagarEntrada = null;
 function pintarEntrada(aviso) {
-  $app.innerHTML = `<div class="entrada"><div class="caja">
-    <div class="logo">DC</div><h1>DC <b>Soporte</b></h1><p class="s">Centro de control</p>
-    ${aviso ? `<div class="error">${esc(aviso)}</div>` : ''}
-    <div class="tar" style="padding:18px">
-      <div class="campo">${ic('user')}<input id="correo" type="email" autocomplete="username" placeholder="Correo de la plataforma"></div>
-      <div class="campo">${ic('lock-key')}<input id="clave" type="password" autocomplete="current-password" placeholder="Contraseña"><button id="ver" class="btn-ico" style="width:32px;height:32px;color:#5b6478" aria-label="Ver contraseña">${ic('eye')}</button></div>
-      <button id="entrar" class="btn oro" style="width:100%">Entrar ${ic('arrow-right', 'bold', 18)}</button>
+  if (apagarEntrada) apagarEntrada();
+  $app.classList.add('modo-ent');
+  const sv = (vb, cuerpo, extra) => `<svg viewBox="${vb}" fill="none" ${extra || ''}>${cuerpo}</svg>`;
+  const mv = (icono, t) => `<div class="mv">${ic(icono, 'dt', 46)}${t}</div>`;
+  $app.innerHTML = `<main class="ent">
+  <div class="cielo"></div><canvas id="red" aria-hidden="true"></canvas><canvas id="chispas" aria-hidden="true"></canvas>
+  <section class="ent-marca"><div class="marca-in" id="marcaIn">
+    <div class="escenario" id="logo3d" role="img" aria-label="DC Soporte">
+      <div class="ent-logo capa" data-p="-.5"><div class="fondo-logo"></div><div class="luz-logo"></div><div class="barrido"></div></div>
+      <svg class="filo" viewBox="0 0 228 200" aria-hidden="true"><defs><linearGradient id="gfilo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#cfe2ff"/><stop offset=".35" stop-color="#4f86ea"/><stop offset=".7" stop-color="#173a86"/><stop offset="1" stop-color="#8fb6ff"/></linearGradient></defs><rect x="1.5" y="1.5" width="225" height="197" rx="29" pathLength="1000"/></svg>
+      <div class="letra capa" data-p="1.15" id="letraD"></div><div class="letra capa" data-p="1.15" id="letraC"></div>
     </div>
-    <div class="pie">${ic('shield-check', 'fill', 14).replace('class="ico"', 'class="ico" style="display:inline;vertical-align:-2px;color:#e7b94a"')} Acceso exclusivo del dueño de DC Gestión Jurídica.<br>La sesión se cierra al cerrar el navegador o tras 15 minutos sin uso.</div>
-  </div></div>`;
-  const c = document.getElementById('correo'), k = document.getElementById('clave'), b = document.getElementById('entrar');
-  document.getElementById('ver').onclick = () => { k.type = k.type === 'password' ? 'text' : 'password'; };
+    <div class="nombre capa" data-p=".5"><span class="tinta">DC Soporte<sup>®</sup></span></div>
+    <div class="linea-oro capa" data-p=".4"></div>
+    <div class="lema capa" data-p=".3">Centro de control y soporte</div>
+    <div class="frase capa" data-p=".2"><span class="ent-barra"></span><p>Control, soporte y crecimiento<br>de toda la plataforma.</p></div>
+    <div class="modulos capa" data-p=".12">${mv('buildings', 'Despachos')}${mv('chart-line-up', 'Ventas')}${mv('headset', 'Soporte')}</div>
+  </div></section>
+  <section class="tarjeta">
+    <div class="avatar">${sv('0 0 24 24', '<circle cx="12" cy="8" r="4.2"/><path d="M4 20.5c0-4.2 3.6-6.8 8-6.8s8 2.6 8 6.8z" stroke-linejoin="round"/>', 'stroke="#fff" stroke-width="1.8"')}</div>
+    <h1>Iniciar Sesión</h1>
+    <div class="sub">Acceda a su centro de control y soporte</div>
+    <div class="subraya"></div>
+    <label class="campo">${sv('0 0 24 24', '<rect x="2.5" y="5" width="19" height="14" rx="1.5"/><path d="M3 6l9 7 9-7"/>', 'stroke="#1b2438" stroke-width="1.8"')}
+      <input id="correo" type="email" autocomplete="username" placeholder="Correo electrónico"></label>
+    <label class="campo">${sv('0 0 24 24', '<rect x="4" y="10.5" width="16" height="11" rx="1.5"/><path d="M7.5 10.5V7.5a4.5 4.5 0 0 1 9 0v3"/><circle cx="12" cy="15" r="1.4" fill="#1b2438"/><path d="M12 16v2.5"/>', 'stroke="#1b2438" stroke-width="1.8"')}
+      <input id="clave" type="password" autocomplete="current-password" placeholder="Contraseña">
+      <button type="button" class="ojo" id="ver" aria-label="Mostrar contraseña"></button></label>
+    <div id="msg">${aviso ? `<div class="msg mal">${esc(aviso)}</div>` : ''}</div>
+    <div class="olvido"><button type="button" id="olvido">¿Olvidó su contraseña?</button></div>
+    <button class="btn-ent" id="entrar">${sv('0 0 40 36', '<path d="M22 4h10a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H22"/><path d="M4 18h21M17 10l8 8-8 8"/>', 'stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"')}<span>Ingresar</span></button>
+    <div class="sellos">
+      <div class="sello">${sv('0 0 24 24', '<path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10v-6z"/><path d="M8.3 12l2.6 2.6 4.9-5"/>', 'stroke="#141d33" stroke-width="1.6" stroke-linejoin="round"')}Datos seguros</div>
+      <div class="sello">${sv('0 0 24 24', '<rect x="4" y="10.5" width="16" height="11" rx="1.5"/><path d="M7.5 10.5V7.5a4.5 4.5 0 0 1 9 0v3"/><path d="M12 14.5v3"/>', 'stroke="#141d33" stroke-width="1.6" stroke-linejoin="round"')}Acceso exclusivo</div>
+      <div class="sello">${sv('0 0 24 24', '<path d="M12 3l10 5-10 5L2 8z"/><path d="M2 12l10 5 10-5M2 16l10 5 10-5"/>', 'stroke="#141d33" stroke-width="1.6" stroke-linejoin="round"')}Registro de auditoría</div>
+    </div>
+  </section>
+  <div class="version">DC Soporte · Versión ${VERSION}</div>
+</main>`;
+  const ojo = (abierto) => sv('0 0 24 24', abierto
+    ? '<path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.3"/>'
+    : '<path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.3"/><path d="M3 3l18 18"/>', 'stroke="#1b2438" stroke-width="1.9"');
+  const c = document.getElementById('correo'), k = document.getElementById('clave'), b = document.getElementById('entrar'), v = document.getElementById('ver'), msg = document.getElementById('msg');
+  const decir = (t, bien) => { msg.innerHTML = t ? `<div class="msg ${bien ? 'bien' : 'mal'}">${esc(t)}</div>` : ''; };
+  v.innerHTML = ojo(true);
+  v.onclick = () => { const ver = k.type === 'password'; k.type = ver ? 'text' : 'password'; v.innerHTML = ojo(!ver); v.setAttribute('aria-label', ver ? 'Ocultar contraseña' : 'Mostrar contraseña'); };
   const ir = async () => {
-    if (!c.value.trim() || !k.value) return toast('Escriba su correo y su contraseña.');
-    b.disabled = true; b.textContent = 'Entrando…';
-    try { await auth('password', { email: c.value.trim(), password: k.value }); await iniciar(); }
-    catch (e) { pintarEntrada(e.message === 'NO_PLATAFORMA' ? 'Esta cuenta no es la de la plataforma. Solo el dueño puede entrar.' : 'Correo o contraseña incorrectos.'); }
+    if (!c.value.trim() || !k.value) return decir('Escriba su correo y su contraseña.');
+    b.disabled = true; b.querySelector('span').textContent = 'Un momento…'; decir('');
+    try { await auth('password', { email: c.value.trim(), password: k.value }); if (apagarEntrada) { apagarEntrada(); apagarEntrada = null; } await iniciar(); }
+    catch (e) {
+      b.disabled = false; b.querySelector('span').textContent = 'Ingresar';
+      decir(e.message === 'NO_PLATAFORMA' ? 'Esta cuenta no es la de la plataforma. Solo el dueño puede entrar.' : 'Correo o contraseña incorrectos.');
+    }
   };
-  b.onclick = ir; k.onkeydown = e => { if (e.key === 'Enter') ir(); };
-  c.focus();
+  document.getElementById('olvido').onclick = async () => {
+    const correo = c.value.trim();
+    if (!correo) { decir('Escriba su correo arriba y vuelva a tocar «¿Olvidó su contraseña?».'); c.focus(); return; }
+    try {
+      const r = await fetch(`${SB}/auth/v1/recover`, { method: 'POST', headers: { apikey: LLAVE, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: correo }) });
+      if (!r.ok) throw new Error();
+      decir('Le enviamos al correo un enlace para crear una contraseña nueva.', true);
+    } catch (e) { decir('No se pudo enviar el enlace. Intente de nuevo en un momento.'); }
+  };
+  b.onclick = ir; [c, k].forEach(i => i.onkeydown = e => { if (e.key === 'Enter') ir(); });
+  apagarEntrada = efectosEntrada();
 }
 
 /* ---------- armazón ---------- */
@@ -108,6 +155,8 @@ function nav() {
     <button class="centro ${on ? 'on' : ''}" data-ir="inicio" aria-label="Inicio">${ic('house', on ? 'fill' : 'bold', 32)}</button><span class="lab ${on ? 'on' : ''}">Inicio</span></nav>`;
 }
 function pintar(html) {
+  if (apagarEntrada) { apagarEntrada(); apagarEntrada = null; }
+  $app.classList.remove('modo-ent');
   $app.innerHTML = html + nav();
   $app.querySelectorAll('[data-ir]').forEach(b => b.onclick = () => ir(b.dataset.ir));
   $app.querySelectorAll('[data-desp]').forEach(b => b.onclick = () => abrirDespacho(Number(b.dataset.desp)));
