@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.0.8';
+const VERSION = '1.1.0';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -9,7 +9,7 @@ const INACTIVIDAD_MIN = 15;
 const ZONA = 'America/Bogota';
 
 const $app = document.getElementById('app');
-const E = { vista: 'inicio', filtro: 'todos', busca: '', det: null, detTab: 'resumen', tablero: null, despachos: null, detalle: null, perfil: null };
+const E = { vista: 'inicio', filtro: 'todos', busca: '', det: null, detTab: 'resumen', tablero: null, despachos: null, detalle: null, perfil: null, ventas: null, periodo: 'mes', verTodosMov: false };
 
 /* ---------- utilidades ---------- */
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -66,7 +66,7 @@ async function rpc(fn, datos = {}) {
 async function salir(motivo) {
   const s = leerSesion();
   if (s) fetch(`${SB}/auth/v1/logout`, { method: 'POST', headers: { apikey: LLAVE, Authorization: 'Bearer ' + s.t } }).catch(() => { });
-  borrarSesion(); Object.assign(E, { tablero: null, despachos: null, detalle: null, det: null, vista: 'inicio' });
+  borrarSesion(); Object.assign(E, { tablero: null, despachos: null, detalle: null, det: null, ventas: null, vista: 'inicio' });
   pintarEntrada(motivo);
 }
 let reloj = null;
@@ -174,6 +174,7 @@ function render() {
     if (E.vista === 'inicio') return vistaInicio();
     if (E.vista === 'despachos') return vistaDespachos();
     if (E.vista === 'ajustes') return vistaAjustes();
+    if (E.vista === 'ventas') return vistaVentas();
     return vistaPronto(E.vista);
   } catch (e) { console.error(e); pintar(`<div class="cuerpo"><div class="aviso">${ic('warning-circle')}<div>Algo falló al mostrar esta pantalla. Toque Inicio para volver.</div></div></div>`); }
 }
@@ -203,7 +204,7 @@ function vistaInicio() {
     ${k('warning-circle', T.errores_7d, 'Errores 7 días', T.errores_7d > T.errores_ayer ? `+${T.errores_7d - T.errores_ayer}` : 'en calma', T.errores_7d > T.errores_ayer ? 'down' : 'up', T.errores_7d > T.errores_ayer ? 'trend-up' : '')}</div>`;
   const M = (v, icono, t, extra, msg) => `<button class="mod ${v === 'despachos' ? 'on' : ''}" ${msg ? `data-pronto="${esc(msg)}"` : `data-ir="${v}"`}>${ic(icono, 'dt', 38).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}<div>${t}</div>${extra || ''}</button>`;
   const grid = `<div class="sec">${ic('squares-four', 'fill', 22)}Centro de control<a data-ir="despachos">Ver todo${ic('caret-right', 'bold', 12)}</a></div><div class="grid">
-    ${M('despachos', 'buildings', 'Despachos')}${M('ventas', 'chart-line-up', 'Ventas', '', 'Ventas y contabilidad llegan en la etapa 2.')}
+    ${M('despachos', 'buildings', 'Despachos')}${M('ventas', 'chart-line-up', 'Ventas')}
     ${M('asist', 'headset', 'Asistencia', '', 'La asistencia remota llega en la etapa 4.')}${M('err', 'bug-beetle', 'Errores', T.errores_7d ? `<span class="bad">${T.errores_7d}</span>` : '', 'El buzón de errores llega en la etapa 5.')}
     ${M('pqrs', 'chat-circle-text', 'PQRS', '', 'El buzón de PQRS llega en la etapa 5.')}${M('anun', 'megaphone', 'Anuncios', '', 'Los anuncios llegan en la etapa 6.')}
     ${M('planes', 'tag', 'Planes y precios', '', 'Planes y precios llegan en la etapa 6.')}${M('salud', 'heartbeat', 'Salud', '', 'La salud del sistema llega en la etapa 6.')}</div>
@@ -328,6 +329,77 @@ function vistaAjustes() {
   });
   document.getElementById('salir').onclick = () => salir();
 }
+/* ---------- Ventas (etapa 2): pagos de Bold, renovaciones, anulaciones y ajustes manuales ---------- */
+const MOV = {
+  venta: ['plus-circle', '#15803d', 'Venta'], renovacion: ['arrows-clockwise', '#c58a12', 'Renovación'],
+  anulacion: ['arrow-u-up-left', '#b91c1c', 'Anulación'], manual: ['sliders-horizontal', '#5b6478', 'Ajuste manual']
+};
+const PERIODOS = [['semana', 'Semana'], ['mes', 'Mes'], ['anio', 'Año'], ['todo', 'Todo']];
+const MEDIO = { CARD: 'tarjeta', PSE: 'PSE', NEQUI: 'Nequi', BANCOLOMBIA_TRANSFER: 'Bancolombia', manual: 'a mano' };
+function tituloPeriodo(V) {
+  const ahora = new Date();
+  if (V.periodo === 'mes') return 'Ingreso de ' + ahora.toLocaleDateString('es-CO', { timeZone: ZONA, month: 'long' });
+  if (V.periodo === 'anio') return 'Ingreso de ' + ahora.toLocaleDateString('es-CO', { timeZone: ZONA, year: 'numeric' });
+  if (V.periodo === 'semana') return 'Ingreso de los últimos 7 días';
+  return 'Ingreso total';
+}
+function grafica(serie) {
+  const vals = (serie || []).map(s => Number(s.total) || 0);
+  if (vals.length < 2) vals.unshift(0);
+  let acc = 0; const pts = vals.map(v => (acc += v));               // acumulado: la línea sube con cada pago
+  const W = 600, H = 150, max = Math.max(1, ...pts);
+  const xy = pts.map((v, i) => [Math.round(i * W / (pts.length - 1)), Math.round(H - 8 - (v / max) * (H - 26))]);
+  const linea = xy.map((p, i) => (i ? 'L' : 'M') + p[0] + ',' + p[1]).join(' ');
+  return `<svg class="graf" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e7b94a" stop-opacity=".45"/><stop offset="1" stop-color="#e7b94a" stop-opacity="0"/></linearGradient></defs>
+    <path d="${linea} L${W},${H} L0,${H} Z" fill="url(#gv)"/><path d="${linea}" fill="none" stroke="#c9941f" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function filaMov(m) {
+  const [icono, col, t] = MOV[m.tipo] || MOV.venta;
+  const plan = m.plan ? m.plan : (m.tipo === 'manual' ? `${m.dias} días` : 'Plan');
+  const sub = `${esc(plan)}${m.medio && m.tipo !== 'manual' ? ' · ' + esc(MEDIO[m.medio] || m.medio) : ''} · ${esc(hace(m.fecha))}`;
+  const monto = m.monto == null ? '<span class="neu">sin cobro</span>' : (m.tipo === 'anulacion' ? `<span class="rojo">−${pesos(m.monto)}</span>` : pesos(m.monto));
+  return `<div class="fl" ${m.despacho_id ? `data-desp="${Number(m.despacho_id)}" style="cursor:pointer"` : ''}>${ic(icono, 'dt', 26).replace('class="ico"', `class="ico" style="color:${col}"`)}
+    <p>${t} · ${esc(m.despacho)}<small>${sub}${m.tipo === 'anulacion' && m.motivo ? ' · ' + esc(m.motivo) : ''}</small></p><div class="monto">${monto}</div></div>`;
+}
+function descargarVentas(V) {
+  const filas = [['Fecha (Colombia)', 'Tipo', 'Despacho', 'Plan', 'Días', 'Monto', 'Medio', 'Referencia Bold', 'Motivo anulación']].concat(V.movimientos.map(m => [
+    new Date(m.fecha).toLocaleString('es-CO', { timeZone: ZONA }), (MOV[m.tipo] || MOV.venta)[2], m.despacho, m.plan || '', m.dias || '', m.monto == null ? '' : Math.round(m.monto), MEDIO[m.medio] || m.medio || '', m.referencia || '', m.motivo || '']));
+  const csv = '﻿' + filas.map(f => f.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `ventas-dc-${V.periodo}-${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); toast('Descargué el archivo de ventas (se abre en Excel).');
+}
+function vistaVentas() {
+  const V = E.ventas && E.ventas.periodo === E.periodo ? E.ventas : null;
+  const cab = `<header class="top2"><div class="logo">DC</div><div><b>Ventas</b><small>Pagos procesados por Bold</small></div>
+    <button class="vol" style="margin-left:auto" id="bajar" aria-label="Descargar en Excel">${ic('download-simple', 'regular', 22)}</button></header>`;
+  const seg = `<div class="seg">${PERIODOS.map(([v, t]) => `<button data-per="${v}" class="${E.periodo === v ? 'on' : ''}">${t}</button>`).join('')}</div>`;
+  if (!V) {
+    pintar(cab + `<div class="cuerpo">${seg}<div class="cargando"></div></div>`); enlazarVentas(null);
+    cargar('ventas', () => rpc('dcsoporte_ventas_transaccional', { periodo: E.periodo })).then(ok => ok && E.vista === 'ventas' && vistaVentas());
+    return;
+  }
+  const dif = V.total_anterior > 0 ? Math.round((V.total - V.total_anterior) * 100 / V.total_anterior) : null;
+  const ingreso = `<div class="tar ingreso"><h4>${ic('chart-line-up', 'regular', 22)}${esc(tituloPeriodo(V))}${dif != null ? `<em class="${dif >= 0 ? 'up' : 'down'}">${ic(dif >= 0 ? 'trend-up' : 'trend-down', 'bold', 13)}${dif >= 0 ? '+' : ''}${dif}%</em>` : ''}</h4>
+    <div class="cifra">${pesos(V.total)}</div>${grafica(V.serie)}
+    <div class="nota">${V.ventas_n} ${V.ventas_n === 1 ? 'venta nueva' : 'ventas nuevas'} por ${pesos(V.ventas_monto)}${V.pendientes ? ` · ${V.pendientes} ${V.pendientes === 1 ? 'compra empezada sin pagar' : 'compras empezadas sin pagar'}` : ''}</div></div>`;
+  const k = (icono, n, l, e, cl) => `<div class="k"><div class="l1">${ic(icono, 'regular', 24)}<b>${esc(n)}</b></div><span>${esc(l)}</span><em class="${cl}">${esc(e)}</em></div>`;
+  const kpis = `<div class="kpis dos">${k('arrows-clockwise', V.renovaciones_n, V.renovaciones_n === 1 ? 'Renovación' : 'Renovaciones', pesos(V.renovaciones_monto), V.renovaciones_n ? 'up' : 'neu')}
+    ${k('arrow-u-up-left', V.anulaciones_n, (V.anulaciones_n === 1 ? 'Anulación' : 'Anulaciones') + ' · ' + pesos(V.anulaciones_monto), V.anulaciones_n ? 'descontado' : 'ninguna', V.anulaciones_n ? 'down' : 'up')}</div>`;
+  const todos = E.verTodosMov, lista = todos ? V.movimientos : V.movimientos.slice(0, 5);
+  const movs = `<div class="tar"><h4>${ic('receipt', 'regular', 22)}Movimientos${V.movimientos.length > 5 ? `<a id="vertodos">${todos ? 'Ver menos' : `Ver todos (${V.movimientos.length})`}${ic('caret-right', 'bold', 12)}</a>` : ''}</h4>
+    ${lista.length ? lista.map(filaMov).join('') : `<div class="vacio">${ic('receipt', 'dt', 24).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}No hubo movimientos en este periodo.</div>`}
+    ${V.manuales_n ? `<div class="nota">Los ajustes manuales son días que usted dio a mano desde la app (sin cobro por Bold).</div>` : ''}</div>`;
+  pintar(cab + `<div class="cuerpo"><div class="ventas-cols"><div>${seg}${ingreso}${kpis}</div><div>${movs}</div></div></div>`);
+  enlazarVentas(V);
+}
+function enlazarVentas(V) {
+  $app.querySelectorAll('[data-per]').forEach(b => b.onclick = () => { E.periodo = b.dataset.per; E.verTodosMov = false; vistaVentas(); });
+  const bj = document.getElementById('bajar'); if (bj) bj.onclick = () => V ? descargarVentas(V) : toast('Espere a que carguen las ventas.');
+  const vt = document.getElementById('vertodos'); if (vt) vt.onclick = () => { E.verTodosMov = !E.verTodosMov; vistaVentas(); };
+  $app.querySelectorAll('.fl[data-desp]').forEach(b => b.onclick = () => { E.vista = 'despachos'; abrirDespacho(Number(b.dataset.desp)); });
+}
+
 function vistaPronto(v) {
   const P = { ventas: ['chart-line-up', 'Ventas', 'La contabilidad de ventas, renovaciones y anulaciones de Bold llega en la etapa 2.'], soporte: ['lifebuoy', 'Soporte', 'La asistencia remota llega en la etapa 4, y el buzón de errores y PQRS en la etapa 5.'] }[v] || ['gear-six', 'Próximamente', ''];
   pintar(`<header class="top2"><div class="logo">DC</div><div><b>${P[1]}</b><small>En construcción</small></div></header><div class="cuerpo">

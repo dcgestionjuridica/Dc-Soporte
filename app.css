@@ -218,3 +218,18 @@ html[data-tema="claro"] #app:after{background:radial-gradient(circle,rgba(231,18
  #app{padding-bottom:96px}
 }
 .sec a,.tar h4 a{white-space:nowrap;flex:none}
+
+/* 1.1.0 · Ventas (modelo 4) */
+.ingreso h4 em{margin-left:auto;font-style:normal;font-size:13px;font-weight:800;display:flex;align-items:center;gap:3px}
+.ingreso .cifra{font-size:clamp(30px,7.5vw,44px);font-weight:800;letter-spacing:-.8px;color:var(--tarT);margin:2px 0 4px}
+.ingreso .graf{display:block;width:100%;height:clamp(96px,22vw,150px);margin:2px 0 6px}
+.ingreso .nota{margin-top:0}
+.fl .monto{font-size:14px;font-weight:800;white-space:nowrap;color:var(--tarT)}
+.fl .monto .rojo,.rojo{color:#b91c1c}.fl .monto .neu{color:var(--tarT2);font-weight:600;font-size:12px}
+.ventas-cols > div > .seg{margin-bottom:12px}
+@media (min-width:900px){
+ .ventas-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+ .ingreso .graf{height:clamp(90px,20vh,170px)}
+ .ingreso .cifra{font-size:clamp(28px,5.5vh,44px)}
+}
+@media (min-width:560px) and (max-width:899px){ .fl .monto{font-size:16px} .ingreso h4 em{font-size:15px} }
