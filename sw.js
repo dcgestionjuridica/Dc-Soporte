@@ -2,7 +2,7 @@
    Siempre pide primero a internet (así cada versión nueva llega sola);
    solo si no hay conexión usa la última copia guardada de la página.
    Nunca guarda nada del servidor (Supabase): solo archivos propios. */
-const CACHE = 'dcsoporte-1.6.6';
+const CACHE = 'dcsoporte-1.6.7';
 self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));

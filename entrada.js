@@ -10,17 +10,30 @@ function efectosEntrada() {
 
   /* tamaño automático: en pantallas anchas todo se escala según el ancho y el ALTO disponibles (igual que la web de DC) */
   const piezas = [raiz.querySelector('.ent-marca'), raiz.querySelector('.tarjeta')];
+  // 1.6.7: después de escalar se mide; si algo se sale de la pantalla visible (arriba, abajo o la versión), se achica hasta que quepa.
+  const ancha = matchMedia('(min-width:1101px), (orientation:landscape)');
   function escala() {
-    const ancho = innerWidth, alto = innerHeight;
-    if (ancho > 820) {
-      const e = Math.max(0.45, Math.min(1.3, Math.min(ancho / 1670, alto / 942)));
-      piezas.forEach(p => { p.style.zoom = e; });
-    } else {
-      const e = Math.max(0.8, Math.min(1, alto / 760));
-      piezas.forEach(p => { p.style.zoom = alto < 760 ? e : ''; });
+    const ancho = innerWidth, alto = raiz.clientHeight || innerHeight;
+    let e = ancha.matches ? Math.min(1.3, ancho / 1670, alto / 942) : 1;
+    const poner = () => piezas.forEach(p => { p.style.zoom = e; });
+    poner();
+    const cs = getComputedStyle(raiz), arriba = parseFloat(cs.paddingTop) || 0, abajo = parseFloat(cs.paddingBottom) || 0;
+    for (let i = 0; i < 5; i++) {
+      const base = raiz.getBoundingClientRect().top;
+      const r = piezas.map((p, k) => { const x = p.getBoundingClientRect(); return { top: x.top - base - (k === 1 ? 40 * e : 0), bottom: x.bottom - base }; });
+      const sup = Math.min(...r.map(x => x.top)), inf = Math.max(...r.map(x => x.bottom));
+      if (sup >= 0 && inf <= alto - abajo + 1) break;
+      const libre = alto - arriba - abajo, usa = ancha.matches ? inf - sup : inf - arriba;
+      e = Math.max(0.3, e * Math.min(0.98, libre / Math.max(1, usa)));
+      poner();
+      if (e === 0.3) break;
     }
   }
   escala(); on(window, 'resize', escala);
+  // si la tarjeta cambia (huella, contraseña, mensajes de error), se vuelve a medir
+  const obs = new MutationObserver(() => requestAnimationFrame(escala));
+  obs.observe(raiz.querySelector('.tarjeta'), { childList: true, subtree: true, characterData: true }); quitar.push(() => obs.disconnect());
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => vivo && escala());
 
   /* red de puntos */
   const c = document.getElementById('red'), x = c.getContext('2d'), d = Math.min(2, devicePixelRatio || 1), m = { x: -9999, y: -9999 };

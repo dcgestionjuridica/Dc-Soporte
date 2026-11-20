@@ -93,7 +93,7 @@
 .ent .version{position:absolute;left:0;right:0;bottom:12px;z-index:2;text-align:center;font-size:11px;color:rgba(255,255,255,.85)}
 
 /* celular */
-@media (max-width:820px){
+@media (max-width:1100px) and (orientation:portrait){
   .ent{flex-direction:column;gap:22px;padding:28px 16px 48px;justify-content:flex-start}
   .ent .ent-marca{width:100%;flex:none}
   .ent .escenario{width:96px;height:84px}
@@ -122,7 +122,7 @@
   .ent .sellos{margin-top:20px}
 }
 /* tableta: la tarjeta un poco más grande que en el celular */
-@media (min-width:560px) and (max-width:820px){
+@media (min-width:560px) and (max-width:1100px) and (orientation:portrait){
   .ent{padding-top:48px}
   .ent .escenario{width:132px;height:116px}.ent .escenario .ent-logo{border-radius:24px}
   .ent .nombre{font-size:38px}.ent .nombre sup{font-size:15px;vertical-align:20px}
@@ -151,7 +151,7 @@
 @media (prefers-reduced-motion:reduce){.ent *{animation-duration:.01s!important;animation-delay:0s!important;animation-iteration-count:1!important}}
 #app.modo-ent{max-width:none;padding-bottom:0;margin:0}
 #app.modo-ent:before,#app.modo-ent:after{display:none}
-@media (min-width:821px){.ent{padding:20px 6.5vw 34px 4vw}.ent .ent-marca{width:auto}.ent .marca-in{width:540px}}
+@media (min-width:1101px), (orientation:landscape){.ent{padding:20px 6.5vw 34px 4vw}.ent .ent-marca{width:auto}.ent .marca-in{width:540px}}
 
 /* 1.6.0 · entrar con huella, estilo banco (igual que en la app del celular) */
 .ent .hb{display:flex;flex-direction:column;align-items:center;text-align:center}
@@ -173,13 +173,13 @@
 .ent .hb-cambio{margin-top:14px;border:0;background:none;cursor:pointer;font:500 15px 'Figtree',sans-serif;color:#5b6478}
 .ent .hb-cambio b{color:var(--azul-link);font-weight:700}
 @keyframes hbLatido{0%,100%{transform:scale(1);box-shadow:0 0 0 8px rgba(231,185,74,.14),0 0 0 16px rgba(231,185,74,.06),0 14px 30px rgba(8,26,60,.45)}50%{transform:scale(1.05);box-shadow:0 0 0 12px rgba(231,185,74,.22),0 0 0 24px rgba(231,185,74,.08),0 14px 30px rgba(8,26,60,.45)}}
-@media (max-width:820px){
+@media (max-width:1100px) and (orientation:portrait){
   .ent .hb-hola{font-size:16px}.ent .hb-nom{font-size:27px}.ent .hb-correo{font-size:13.5px}
   .ent .hb-circ{width:108px;height:108px;margin:20px 0 12px}.ent .hb-circ .ico{width:60px;height:60px}
   .ent .hb-toque{font-size:16.5px}.ent .hb-toque2{font-size:12.5px}
   .ent .hb-clave{height:50px;font-size:17px}.ent .hb-cambio{font-size:13.5px;margin-top:12px}
 }
-@media (min-width:821px) and (max-height:700px){
+@media (min-width:1101px) and (max-height:700px), (orientation:landscape) and (max-height:700px){
   .ent .tarjeta:has(.hb){padding-top:56px;padding-bottom:20px}
   .ent .hb-circ{width:96px;height:96px;margin:14px 0 10px}.ent .hb-circ .ico{width:54px;height:54px}
   .ent .hb-nom{font-size:28px}.ent .tarjeta:has(.hb) .sellos{margin-top:16px}
@@ -196,5 +196,16 @@
 .ent .btn-ent{letter-spacing:1.2px}
 .ent .sello{letter-spacing:.6px}
 .ent .hb-toque,.ent .hb-toque2,.ent .hb-clave,.ent .hb-cambio,.ent .hb-correo{letter-spacing:.5px}
-@media (max-width:820px){.ent .sub{font-size:15px;letter-spacing:.5px}.ent .campo{margin-bottom:14px}.ent .campo input{font-size:16px}.ent .olvido{margin:12px 2px 16px}}
-@media (min-width:821px){.ent .tarjeta{padding-top:84px}.ent .subraya{margin:20px auto 30px}.ent .campo{margin-bottom:20px;height:54px}.ent .olvido{margin:20px 2px 26px}.ent .sellos{margin-top:30px}}
+@media (max-width:1100px) and (orientation:portrait){.ent .sub{font-size:15px;letter-spacing:.5px}.ent .campo{margin-bottom:14px}.ent .campo input{font-size:16px}.ent .olvido{margin:12px 2px 16px}}
+@media (min-width:1101px), (orientation:landscape){.ent .tarjeta{padding-top:84px}.ent .subraya{margin:20px auto 30px}.ent .campo{margin-bottom:20px;height:54px}.ent .olvido{margin:20px 2px 26px}.ent .sellos{margin-top:30px}}
+
+/* 1.6.7 · la entrada SIEMPRE cabe completa en una sola pantalla, sin bajar, en todo equipo (celular y tableta paradas
+   o acostadas, computador): alto exacto de la pantalla visible, respeta las barras del sistema y entrada.js achica todo
+   lo necesario para que quepa (versión incluida). */
+.ent{height:100vh;height:100dvh;min-height:0;
+  padding-top:calc(20px + env(safe-area-inset-top));padding-bottom:calc(34px + env(safe-area-inset-bottom))}
+@media (max-width:1100px) and (orientation:portrait){.ent{padding-top:calc(24px + env(safe-area-inset-top));padding-bottom:calc(40px + env(safe-area-inset-bottom))}}
+.ent .version{bottom:calc(10px + env(safe-area-inset-bottom))}
+#app.modo-ent{min-height:0;height:100vh;height:100dvh;overflow:hidden}
+body:has(#app.modo-ent){min-height:0;overflow:hidden}
+@media (max-width:1100px) and (orientation:portrait){.ent{justify-content:center;justify-content:safe center}}
