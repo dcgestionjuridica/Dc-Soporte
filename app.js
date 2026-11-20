@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.6.1';
+const VERSION = '1.6.2';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -74,15 +74,33 @@ async function rpc(fn, datos = {}) {
 async function salir(motivo) {
   const s = leerSesion();
   if (s) fetch(`${SB}/auth/v1/logout`, { method: 'POST', headers: { apikey: LLAVE, Authorization: 'Bearer ' + s.t } }).catch(() => { });
-  pararVivo(); clearTimeout(reloj); document.querySelectorAll('.hoja').forEach(h => h.remove());
+  pararVivo(); try { sessionStorage.removeItem(CLAVE_USO); } catch (e) { } document.querySelectorAll('.hoja').forEach(h => h.remove());
   borrarSesion(); Object.assign(E, { tablero: null, despachos: null, detalle: null, det: null, ventas: null, vista: 'inicio', soporte: null, modo: null, vivo: null, buzon: null, caso: null, casoId: null, ajustes: null, ajSec: null, borrador: '' });
   pintarEntrada(motivo);
 }
 let reloj = null, vigilando = false;
-function reiniciarInactividad() { clearTimeout(reloj); if (leerSesion()) reloj = setTimeout(() => salir('Se cerró la sesión por 15 minutos sin uso.'), INACTIVIDAD_MIN * 60000); }
+// Cierre por inactividad (1.6.2): se guarda la hora del último toque o tecla y se revisa cada 20 segundos y al volver
+// a la app. Así se cierra aunque el celular haya estado bloqueado o la pestaña en segundo plano (ahí el navegador
+// congela los relojes). Solo cuentan los toques y teclas de la persona: el desplazamiento no, porque la app también
+// se desplaza sola al actualizarse cada 15 segundos.
+const CLAVE_USO = 'dcsoporte-ultimo-uso';
+function marcarUso() { try { sessionStorage.setItem(CLAVE_USO, String(Date.now())); } catch (e) { } }
+function ultimoUso() { try { return Number(sessionStorage.getItem(CLAVE_USO)) || 0; } catch (e) { return 0; } }
+function revisarInactividad() {
+  if (!leerSesion()) return;
+  const u = ultimoUso();
+  if (u && Date.now() - u >= INACTIVIDAD_MIN * 60000) salir('Se cerró la sesión por 15 minutos sin uso.');
+}
+function reiniciarInactividad() { if (leerSesion()) marcarUso(); }
 function vigilarInactividad() {
-  if (!vigilando) { vigilando = true; ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(ev => addEventListener(ev, reiniciarInactividad, { passive: true })); }
-  reiniciarInactividad();
+  if (!vigilando) {
+    vigilando = true;
+    ['pointerdown', 'keydown', 'touchstart', 'wheel'].forEach(ev => addEventListener(ev, reiniciarInactividad, { passive: true }));
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') revisarInactividad(); });
+    addEventListener('focus', revisarInactividad); addEventListener('pageshow', revisarInactividad);
+    setInterval(revisarInactividad, 20000);
+  }
+  marcarUso();
 }
 
 /* ---------- entrada (copia de la entrada de la web de DC Gestión Jurídica) ---------- */
@@ -1005,7 +1023,8 @@ matchMedia('(prefers-color-scheme: light)').addEventListener && matchMedia('(pre
 });
 let anchoPrevio = innerWidth >= 900;
 addEventListener('resize', () => { const a = innerWidth >= 900; if (a !== anchoPrevio) { anchoPrevio = a; if (leerSesion()) render(); } });
-if (leerSesion()) iniciar(); else pintarEntrada();
+if (leerSesion() && ultimoUso() && Date.now() - ultimoUso() >= INACTIVIDAD_MIN * 60000) salir('Se cerró la sesión por 15 minutos sin uso.');
+else if (leerSesion()) iniciar(); else pintarEntrada();
 
 // Permite instalar DC Soporte como aplicación (tableta, celular o computador).
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
