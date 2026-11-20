@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -9,7 +9,7 @@ const INACTIVIDAD_MIN = 15;
 const ZONA = 'America/Bogota';
 
 const $app = document.getElementById('app');
-const E = { vista: 'inicio', filtro: 'todos', busca: '', det: null, detTab: 'resumen', tablero: null, despachos: null, detalle: null, perfil: null, ventas: null, periodo: 'mes', verTodosMov: false };
+const E = { vista: 'inicio', filtro: 'todos', busca: '', det: null, detTab: 'resumen', tablero: null, despachos: null, detalle: null, perfil: null, ventas: null, periodo: 'mes', verTodosMov: false, soporte: null, modo: null, vivo: null, todasAcc: false };
 
 /* ---------- utilidades ---------- */
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -161,6 +161,7 @@ function pintar(html) {
   $app.querySelectorAll('[data-ir]').forEach(b => b.onclick = () => ir(b.dataset.ir));
   $app.querySelectorAll('[data-desp]').forEach(b => b.onclick = () => abrirDespacho(Number(b.dataset.desp)));
   $app.querySelectorAll('[data-pronto]').forEach(b => b.onclick = () => toast(b.dataset.pronto));
+  $app.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { pararVivo(); E.vista = 'soporte'; E.det = null; E.modo = Number(b.dataset.modo); E.vivo = null; scrollTo(0, 0); render(); });
   const ct = document.getElementById('cambiar-tema');
   if (ct) ct.onclick = () => {
     const nuevo = document.documentElement.getAttribute('data-tema') === 'claro' ? 'oscuro' : 'claro';
@@ -168,13 +169,14 @@ function pintar(html) {
     document.documentElement.setAttribute('data-tema', nuevo); render();
   };
 }
-function ir(v) { E.vista = v; if (v !== 'despachos') E.det = null; scrollTo(0, 0); render(); }
+function ir(v) { if (v === 'soporte') { E.modo = null; E.soporte = null; } pararVivo(); E.vista = v; if (v !== 'despachos') E.det = null; scrollTo(0, 0); render(); }
 function render() {
   try {
     if (E.vista === 'inicio') return vistaInicio();
     if (E.vista === 'despachos') return vistaDespachos();
     if (E.vista === 'ajustes') return vistaAjustes();
     if (E.vista === 'ventas') return vistaVentas();
+    if (E.vista === 'soporte') return E.modo ? vistaModo() : vistaSoporte();
     return vistaPronto(E.vista);
   } catch (e) { console.error(e); pintar(`<div class="cuerpo"><div class="aviso">${ic('warning-circle')}<div>Algo falló al mostrar esta pantalla. Toque Inicio para volver.</div></div></div>`); }
 }
@@ -286,8 +288,8 @@ function panelDetalle() {
       <div class="tar"><h4>${ic('identification-card', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Datos del despacho</h4>
         <div class="dato"><span>Sesiones totales</span><b>${D.sesiones}</b></div><div class="dato"><span>Versión que usa</span><b>${esc(U ? U.version || '—' : '—')}</b></div>
         <div class="dato"><span>Errores en 30 días</span><b>${D.errores_30d}</b></div><div class="dato"><span>Procesos incluidos</span><b>${(D.plan ? D.plan.procesos : 0) + (D.procesos_extra || 0)}</b></div></div>
-      <div class="acc"><button class="btn oro" data-pronto="Entrar a dar soporte desde aquí llega en la etapa 4."><span class="cir">${ic('headset', 'bold', 15)}</span>Dar soporte</button>
-      <button class="btn az" data-pronto="Escribirle al despacho desde aquí llega en la etapa 4.">${ic('envelope-simple', 'regular', 20)}Escribirle</button></div>`;
+      <div class="acc"><button class="btn oro" ${D.soporte ? `data-modo="${Number(D.id)}"` : `data-pronto="${esc(D.nombre)} no le ha dado permiso de soporte. Pídale que lo autorice en Configuración › Soporte técnico."`}><span class="cir">${ic('headset', 'bold', 15)}</span>Dar soporte</button>
+      <button class="btn az" data-pronto="Escribirle al despacho desde aquí llega con el buzón (etapa 5).">${ic('envelope-simple', 'regular', 20)}Escribirle</button></div>`;
   } else if (E.detTab === 'actividad') {
     cuerpo = tarRecorrido(D);
   } else if (E.detTab === 'usuarios') {
@@ -435,6 +437,132 @@ function enlazarVentas(V) {
   const bj = document.getElementById('bajar'); if (bj) bj.onclick = () => V ? menuDescarga(V) : toast('Espere a que carguen las ventas.');
   const vt = document.getElementById('vertodos'); if (vt) vt.onclick = () => { E.verTodosMov = !E.verTodosMov; vistaVentas(); };
   $app.querySelectorAll('.fl[data-desp]').forEach(b => b.onclick = () => { E.vista = 'despachos'; abrirDespacho(Number(b.dataset.desp)); });
+}
+
+/* ---------- Soporte (etapa 4): asistencia remota con el permiso que da cada despacho ---------- */
+const APP_COMERCIAL = 'https://dcgestionjuridica.github.io/dc-gestion-juridica-app/';
+const quedan = m => m == null ? '' : m >= 1440 ? `${Math.floor(m / 1440)} d ${Math.floor(m % 1440 / 60)} h` : m >= 60 ? `${Math.floor(m / 60)} h ${m % 60 ? (m % 60) + ' min' : ''}`.trim() : `${m} min`;
+const NOMBRE_ACCION = { ENTRAR: 'Entró a la app', SALIR: 'Salió de la app', CREAR: 'Creó', EDITAR: 'Editó', ELIMINAR: 'Eliminó', GUARDAR: 'Guardó', ENVIAR: 'Envió' };
+const nomAccion = a => NOMBRE_ACCION[a] || String(a || '').toLowerCase().replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+let relojVivo = null;
+function pararVivo() { if (relojVivo) { clearInterval(relojVivo); relojVivo = null; } }
+function vistaSoporte() {
+  pararVivo();
+  const S = E.soporte;
+  const cab = `<header class="top2"><div class="logo">DC</div><div><b>Soporte</b><small>Asistencia remota con permiso del despacho</small></div>
+    <button class="vol" style="margin-left:auto" id="recargar-sop" aria-label="Actualizar">${ic('arrows-clockwise', 'regular', 22)}</button></header>`;
+  if (!S) {
+    pintar(cab + `<div class="cuerpo"><div class="cargando"></div></div>`);
+    cargar('soporte', () => rpc('dcsoporte_soporte_transaccional')).then(ok => ok && E.vista === 'soporte' && !E.modo && vistaSoporte());
+    return;
+  }
+  const con = S.despachos.filter(d => d.minutos != null), sin = S.despachos.filter(d => d.minutos == null);
+  const fila = d => {
+    const vivo = S.atendiendo === d.id, gente = d.conectados ? `${d.conectados} ${d.conectados === 1 ? 'conectado' : 'conectados'} ahora` : 'Nadie conectado';
+    const sub = d.minutos != null ? `Quedan ${quedan(d.minutos)} · ${gente}` : `${gente}${d.ultima_ayuda ? ' · última ayuda ' + hace(d.ultima_ayuda).toLowerCase() : ''}`;
+    const et = vivo ? '<span class="et e-ven">EN VIVO</span>' : d.minutos != null ? '<span class="et e-pago">CON PERMISO</span>' : '';
+    return `<div class="desp" data-sop="${Number(d.id)}" style="cursor:pointer"><div class="av">${esc(iniciales(d.nombre))}</div><p>${esc(d.nombre)}<small>${d.conectados ? '<i class="pt-verde"></i>' : ''}${esc(sub)}</small></p>${et}${ic('caret-right', 'bold', 14)}</div>`;
+  };
+  const icT = (n, col) => ic(n, 'dt', 22).replace('class="ico"', `class="ico" style="color:${col || '#0f1e3d'}"`);
+  const conP = `<div class="tar"><h4>${icT('lock-key')}Le dieron permiso (${con.length})</h4>${con.length ? con.map(fila).join('') : `<div class="vacio">${icT('lifebuoy')}Ningún despacho tiene el permiso de soporte abierto en este momento.</div>`}</div>`;
+  const sinP = sin.length ? `<div class="tar"><h4>${icT('buildings')}Sin permiso (${sin.length})</h4>${sin.map(fila).join('')}</div>` : '';
+  const como = `<div class="aviso">${ic('lock-key', 'fill', 22)}<div>Usted solo entra a un despacho cuando el titular o un administrador le da permiso desde su app, en <b>Configuración › Soporte técnico</b>, por 2, 24 o 72 horas. Todo lo que haga queda anotado y ellos lo ven.</div></div>`;
+  const buzon = `<div class="tar"><h4>${icT('chat-circle-text')}Buzón de errores y PQRS</h4><div class="vacio">${icT('bug-beetle', '#b91c1c')}Los errores automáticos, las peticiones y los reclamos llegan aquí en la etapa 5.</div></div>`;
+  pintar(cab + `<div class="cuerpo"><div class="ventas-cols"><div>${como}${conP}</div><div>${sinP}${buzon}</div></div></div>`);
+  const rc = document.getElementById('recargar-sop'); if (rc) rc.onclick = () => { E.soporte = null; vistaSoporte(); };
+  $app.querySelectorAll('[data-sop]').forEach(b => b.onclick = () => {
+    const d = S.despachos.find(x => x.id === Number(b.dataset.sop));
+    if (d.minutos == null) return toast(`${d.nombre} no le ha dado permiso de soporte. Pídale que lo autorice en Configuración › Soporte técnico.`);
+    E.modo = d.id; E.vivo = null; scrollTo(0, 0); vistaModo();
+  });
+}
+async function cargarVivo() {
+  const id = E.modo;
+  try { const r = await rpc('dcsoporte_en_vivo_transaccional', { id }); if (E.modo === id) { E.vivo = r; if (E.vista === 'soporte' && !document.querySelector('.hoja')) vistaModo(); } }
+  catch (e) {
+    if (e.message === 'SIN_SESION') return salir(); if (e.message === 'NO_PLATAFORMA') return salir('Esta cuenta no es la de la plataforma.');
+    pararVivo(); toast(/autoriz|venci/i.test(e.message) ? 'El permiso de soporte de este despacho venció o lo retiraron.' : 'No se pudo cargar: ' + e.message);
+    E.modo = null; E.soporte = null; if (E.vista === 'soporte') vistaSoporte();
+  }
+}
+function vistaModo() {
+  const V = E.vivo && E.vivo.id === E.modo ? E.vivo : null;
+  const d = (E.soporte && E.soporte.despachos.find(x => x.id === E.modo)) || {};
+  const nombre = V ? V.nombre : d.nombre || '';
+  const enVivo = V ? V.atendiendo : E.soporte && E.soporte.atendiendo === E.modo;
+  const cab = `<header class="top2"><button class="vol" id="volver-sop" aria-label="Volver">${ic('caret-left', 'bold', 20)}</button>
+    <div style="min-width:0"><b>Modo soporte</b><small class="sub2">${esc(nombre)}${V && V.minutos != null ? ' · quedan ' + esc(quedan(V.minutos)) : ''}</small></div>
+    <span class="et ${enVivo ? 'e-ven' : 'e-oro'}" style="margin-left:auto">${enVivo ? 'EN VIVO' : 'SOLO MIRAR'}</span></header>`;
+  if (!relojVivo) { cargarVivo(); relojVivo = setInterval(cargarVivo, 15000); }
+  if (!V) { pintar(cab + `<div class="cuerpo"><div class="cargando"></div></div>`); enlazarModo(); return; }
+  const icT = (n, col, t = 22) => ic(n, 'dt', t).replace('class="ico"', `class="ico" style="color:${col || '#0f1e3d'}"`);
+  const aviso = `<div class="aviso">${ic('lock-key', 'fill', 22)}<div>El despacho le <b>concedió</b> este acceso. Todo lo que haga queda anotado y ellos lo ven en su historial. Mirar en vivo no abre datos de sus clientes; solo se abren si usted entra a corregir.</div></div>`;
+  const gente = `<div class="tar" id="en-vivo"><h4>${icT('eye')}En vivo ahora<a id="act-vivo">Actualiza sola · ${esc(hora(V.ahora))}</a></h4>${V.conectados.length ? V.conectados.map(u => `
+    <div class="fl">${icT(u.modulo ? nomMod(u.modulo)[1] : 'user', '#0f1e3d', 26)}<p>${esc(u.usuario)} · ${esc(u.rol || '')}<small>${u.modulo ? 'En <b>' + esc(nomMod(u.modulo)[0]) + '</b> · ' : ''}${esc(u.equipo || '')}${u.version ? ' · v' + esc(u.version) : ''}</small></p><div class="h">${esc(hace(u.ultima))}</div></div>`).join('')
+    : `<div class="vacio">${icT('user')}Nadie del despacho está conectado en este momento.</div>`}</div>`;
+  const todas = E.todasAcc, lista = V.acciones.slice(0, todas ? 15 : 8);
+  const acciones = `<div class="tar" id="acciones"><h4>${icT('list-checks')}Últimas acciones${V.acciones.length > 2 ? `<a id="ver-acc">${todas ? 'Ver menos' : 'Ver todas'}${ic('caret-right', 'bold', 12)}</a>` : ''}</h4>${lista.length ? lista.map(a => {
+    const mal = a.resultado && !/^ok$/i.test(a.resultado);
+    return `<div class="fl">${mal ? icT('warning-octagon', '#b91c1c', 24) : icT('check-circle', '#15803d', 24)}<p>${esc(nomAccion(a.accion))}${a.modulo ? ' · ' + esc(a.modulo) : ''}<small>${esc(a.usuario || '')}${mal ? ' · ' + esc(a.resultado) : ''}</small></p><div class="h">${esc(hace(a.fecha))}<br>${esc(hora(a.fecha))}</div></div>`; }).join('')
+    : `<div class="vacio">${icT('list-checks')}Todavía no hay acciones anotadas.</div>`}</div>`;
+  const t = (id, icono, col, l1, l2) => `<button class="mosaico" id="${id}">${icT(icono, col, 40)}<b>${l1}</b><span>${l2}</span></button>`;
+  const mosaicos = `<div class="mosaicos">${t('m-ver', 'eye', '#0f1e3d', 'Ver en vivo', '(solo mirar)')}${t('m-corregir', 'pencil-simple-line', '#0f1e3d', 'Corregir', '(con segundo sí)')}
+    ${t('m-version', 'arrows-clockwise', '#c58a12', 'Forzar versión', 'nueva')}${t('m-chat', 'chats', '#0f1e3d', 'Chat del', 'caso')}</div>`;
+  const fin = `<button class="btn rojo-fin" id="m-fin">${ic('stop-circle', 'bold', 22)}Terminar y enviar resumen</button>`;
+  const y = scrollY;
+  pintar(cab + `<div class="cuerpo"><div class="ventas-cols"><div>${aviso}${gente}</div><div>${mosaicos}${fin}${acciones}</div></div></div>`);
+  if (!todas) {                                   // se muestran las acciones que caben en la pantalla; el resto con «Ver todas»
+    const filas = [...document.querySelectorAll('#acciones .fl')];
+    while (filas.length > 2 && document.documentElement.scrollHeight > innerHeight + 1) filas.pop().remove();
+    const va = document.getElementById('ver-acc'); if (va && filas.length >= V.acciones.length) va.remove();
+  }
+  scrollTo(0, y); enlazarModo();
+}
+function hojaSoporte(html, alAbrir) {
+  const h = document.createElement('div'); h.className = 'hoja';
+  h.innerHTML = `<div class="caja" role="dialog"><i class="asa"></i>${html}</div>`;
+  const cerrar = () => { h.classList.remove('on'); setTimeout(() => h.remove(), 220); };
+  h.onclick = e => { if (e.target === h) cerrar(); };
+  h.querySelectorAll('[data-cerrar]').forEach(b => b.onclick = cerrar);
+  document.body.appendChild(h); requestAnimationFrame(() => h.classList.add('on'));
+  if (alAbrir) alAbrir(h, cerrar);
+}
+function enlazarModo() {
+  const v = document.getElementById('volver-sop'); if (v) v.onclick = () => { pararVivo(); E.modo = null; E.soporte = null; vistaSoporte(); };
+  const ver = document.getElementById('m-ver'); if (ver) ver.onclick = () => { document.getElementById('en-vivo').scrollIntoView({ behavior: 'smooth', block: 'start' }); cargarVivo(); toast('Mirando en vivo. Se actualiza cada 15 segundos.'); };
+  const va = document.getElementById('ver-acc'); if (va) va.onclick = () => { E.todasAcc = !E.todasAcc; vistaModo(); };
+  const ver2 = document.getElementById('m-version'); if (ver2) ver2.onclick = () => toast('Forzar la versión nueva llega con la próxima versión de la app comercial.');
+  const ch = document.getElementById('m-chat'); if (ch) ch.onclick = () => toast('El chat del caso llega con el buzón de soporte (etapa 5).');
+  const co = document.getElementById('m-corregir'); if (co) co.onclick = () => {
+    const nombre = E.vivo ? E.vivo.nombre : '';
+    hojaSoporte(`<h4>¿Entrar a corregir?</h4><small>Va a entrar a <b>${esc(nombre)}</b> con su cuenta de la plataforma. Verá sus datos como ellos los ven, cada cambio queda anotado y el despacho lo ve en su historial. Se abre la app comercial en otra pestaña.</small>
+      <button class="hb" id="h-si">${ic('pencil-simple-line', 'dt', 30).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}<span><b>Sí, entrar a corregir</b><em>Segundo sí: queda anotado al instante</em></span>${ic('arrow-square-out', 'bold', 16)}</button>
+      <button class="cancelar" data-cerrar>Cancelar</button>`, (h, cerrar) => {
+      h.querySelector('#h-si').onclick = async () => {
+        const pest = window.open('', '_blank');                  // se abre ya, para que el navegador no la bloquee
+        try {
+          await rpc('plataforma_entrar_despacho_transaccional', { despacho_id: E.modo });
+          if (pest) { pest.opener = null; pest.location.href = APP_COMERCIAL; } else location.assign(APP_COMERCIAL);
+          cerrar(); toast('Entró al despacho. Cuando termine, vuelva aquí y toque «Terminar y enviar resumen».'); cargarVivo();
+        } catch (e) { if (pest) pest.close(); toast('No se pudo entrar: ' + e.message); }
+      };
+    });
+  };
+  const fin = document.getElementById('m-fin'); if (fin) fin.onclick = () => {
+    hojaSoporte(`<h4>Terminar el soporte</h4><small>Escriba en pocas palabras qué revisó o qué corrigió. El despacho lo verá en su historial de soporte.</small>
+      <textarea id="h-res" maxlength="300" rows="4" placeholder="Ejemplo: Revisé el error al guardar abonos en Cartera y quedó corregido."></textarea><div class="cuenta"><span id="h-n">0</span>/300</div>
+      <button class="hb" id="h-env">${ic('paper-plane-tilt', 'dt', 30).replace('class="ico"', 'class="ico" style="color:#b91c1c"')}<span><b>Enviar resumen y salir</b><em>Usted sale del despacho; el permiso sigue hasta que venza</em></span>${ic('caret-right', 'bold', 16)}</button>
+      <button class="cancelar" data-cerrar>Cancelar</button>`, (h, cerrar) => {
+      const ta = h.querySelector('#h-res'), n = h.querySelector('#h-n');
+      ta.oninput = () => { n.textContent = ta.value.length; }; setTimeout(() => ta.focus(), 250);
+      h.querySelector('#h-env').onclick = async () => {
+        const r = ta.value.trim(); if (r.length < 5) { ta.focus(); return toast('Escriba un resumen corto de lo que hizo.'); }
+        const b = h.querySelector('#h-env'); b.disabled = true;
+        try { await rpc('dcsoporte_soporte_terminar_transaccional', { id: E.modo, resumen: r }); cerrar(); pararVivo(); E.modo = null; E.soporte = null; vistaSoporte(); toast('Listo: salió del despacho y el resumen quedó en su historial.'); }
+        catch (e) { b.disabled = false; toast('No se pudo enviar: ' + e.message); }
+      };
+    });
+  };
 }
 
 function vistaPronto(v) {

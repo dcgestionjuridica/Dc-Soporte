@@ -246,3 +246,29 @@ html[data-tema="claro"] #app:after{background:radial-gradient(circle,rgba(231,18
 .hoja button:active{transform:scale(.985)}.hoja button:disabled{opacity:.7}
 .hoja button.cancelar{justify-content:center;background:transparent;border:0;box-shadow:none;font-weight:700;color:var(--tarT2);margin:2px 0 0}
 @media (min-width:900px){.hoja{align-items:center}.hoja .caja{border-radius:24px;transform:translateY(30px);opacity:0;transition:transform .22s,opacity .22s}.hoja.on .caja{transform:none;opacity:1}}
+
+/* ---------- 1.3 · Soporte y modo soporte (modelo 4) ---------- */
+.mosaicos{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.mosaico{border-radius:18px;background:var(--tar);box-shadow:var(--tar-sombra);color:var(--tarT);padding:14px 8px 12px;display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;min-height:112px;justify-content:center}
+.mosaico .ico{margin-bottom:6px}.mosaico b{font-size:14px;font-weight:800;line-height:1.2}.mosaico span{font-size:13px;font-weight:700;line-height:1.2}
+.mosaico:active{transform:scale(.97)}
+.btn.rojo-fin{width:100%;background:linear-gradient(180deg,#b3261e,#8c1b15);color:#fff;border:1.5px solid var(--oro);box-shadow:0 8px 20px rgba(140,27,21,.35);margin-bottom:12px;min-height:54px;font-size:15.5px}
+.tar h4 a#act-vivo{font-size:11px;font-weight:600;color:var(--tarT2);cursor:default}
+.fl p small b{color:var(--tarT)}
+.desp > .ico:last-child{color:var(--tarT2);flex:none}
+.hoja button.hb{margin-top:4px}
+.hoja textarea{width:100%;border-radius:14px;border:1.5px solid #d6dce8;padding:12px 14px;font:inherit;font-size:15px;color:#0f1e3d;background:#fff;resize:none;outline:none}
+.hoja textarea:focus{border-color:var(--oro);box-shadow:0 0 0 3px rgba(231,185,74,.25)}
+.hoja .cuenta{text-align:right;font-size:11.5px;color:var(--tarT2);margin:4px 2px 8px}
+.hoja small b{color:var(--tarT)}
+@media (min-width:560px) and (max-width:899px){
+ .mosaico{min-height:clamp(118px,13vh,150px)}.mosaico b{font-size:16.5px}.mosaico span{font-size:15px}
+ .btn.rojo-fin{min-height:clamp(56px,6vh,66px);font-size:17px}
+}
+@media (min-width:900px){
+ .mosaicos{gap:clamp(8px,1.4vh,12px);margin-bottom:clamp(8px,1.4vh,12px)}
+ .mosaico{min-height:clamp(84px,15vh,128px);padding:clamp(8px,1.4vh,14px) 8px}.mosaico .ico{width:clamp(28px,5.4vh,40px);height:clamp(28px,5.4vh,40px);margin-bottom:clamp(2px,.6vh,6px)}
+ .btn.rojo-fin{min-height:clamp(44px,8vh,56px);margin-bottom:clamp(8px,1.4vh,12px)}
+}
+.pt-verde{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:5px;vertical-align:0;box-shadow:0 0 0 2px rgba(34,197,94,.2)}
+.top2 .sub2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3}
