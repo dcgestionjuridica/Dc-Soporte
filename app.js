@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.6.4';
+const VERSION = '1.6.5';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -234,7 +234,7 @@ function pintar(html) {
   $app.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { pararVivo(); E.vista = 'soporte'; E.det = null; E.casoId = null; E.modo = Number(b.dataset.modo); E.vivo = null; scrollTo(0, 0); render(); });
   const va = document.getElementById('ver-atencion'); if (va) va.onclick = () => { const t = document.getElementById('atencion'); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); t.classList.add('resalta'); setTimeout(() => t.classList.remove('resalta'), 1600); } };
   $app.querySelectorAll('[data-nuevo-desp]').forEach(b => b.onclick = nuevoDespacho);
-  const cl = document.getElementById('cambiar-lim'); if (cl) cl.onclick = cambiarUsuarios;
+  $app.querySelectorAll('#cambiar-lim,[data-cambiar-lim]').forEach(b => b.onclick = cambiarUsuarios);
   $app.querySelectorAll('[data-reenviar]').forEach(b => b.onclick = () => reenviarEnlace(Number(b.dataset.reenviar), b.dataset.nom));
   const ct = document.getElementById('cambiar-tema');
   if (ct) ct.onclick = () => {
@@ -369,7 +369,7 @@ function panelDetalle() {
       ${E.titular && E.titular.correo && !E.titular.entro && E.titular.despacho !== 0 ? `<div class="aviso aviso-enl">${ic('envelope-simple', 'regular', 22)}<div>El titular (${esc(E.titular.correo)}) todavía no ha entrado.</div><button class="mini-btn" data-reenviar="${Number(D.id)}" data-nom="${esc(D.nombre)}">Reenviar enlace</button></div>` : ''}
       <div class="tar"><h4>${ic('identification-card', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Datos del despacho</h4>
         <div class="dato"><span>Sesiones totales</span><b>${D.sesiones}</b></div><div class="dato"><span>Versión que usa</span><b>${esc(U ? U.version || '—' : '—')}</b></div>
-        <div class="dato"><span>Errores en 30 días</span><b>${D.errores_30d}</b></div><div class="dato"><span>Procesos incluidos</span><b>${(D.plan ? D.plan.procesos : 0) + (D.procesos_extra || 0)}</b></div></div>
+        <div class="dato"><span>Errores en 30 días</span><b>${D.errores_30d}</b></div><div class="dato"><span>Procesos incluidos</span><b>${(D.plan ? D.plan.procesos : 0) + (D.procesos_extra || 0)}${D.plan ? `<button class="cambiar-lim chico" data-cambiar-lim aria-label="Cambiar cantidad de procesos">${ic('pencil-simple-line', 'bold', 13)}</button>` : ''}</b></div></div>
       <div class="acc"><button class="btn oro" ${D.soporte ? `data-modo="${Number(D.id)}"` : `data-pronto="${esc(D.nombre)} no le ha dado permiso de soporte. Pídale que lo autorice en Configuración › Soporte técnico."`}><span class="cir">${ic('headset', 'bold', 15)}</span>Dar soporte</button>
       <button class="btn az" data-chat="${Number(D.id)}">${ic('envelope-simple', 'regular', 20)}Escribirle</button></div>`;
   } else if (E.detTab === 'actividad') {
@@ -380,7 +380,7 @@ function panelDetalle() {
       <span class="et ${u.activo ? 'e-pago' : 'e-gris'}">${u.activo ? 'ACTIVO' : 'INACTIVO'}</span></div>`).join('') : `<div class="vacio">Sin usuarios.</div>`}</div>`;
   } else {
     cuerpo = `<div class="tar"><h4>${ic('receipt', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Pagos y renovaciones</h4>${D.pagos.length ? D.pagos.map(p => `
-      <div class="fl">${ic(p.anulado ? 'arrow-u-up-left' : (p.monto > 0 ? 'plus-circle' : 'gift'), 'dt', 26).replace('class="ico"', `class="ico" style="color:${p.anulado ? '#b91c1c' : p.monto > 0 ? '#15803d' : '#1d4ed8'}"`)}<p>${p.anulado ? 'Anulado' : p.monto > 0 ? 'Pago' : 'Días sin cobro'} · ${esc(p.plan || D.plan && D.plan.nombre || '')}<small>${esc(fecha(p.fecha))} · ${p.dias} días · ${esc(p.fuente || '')}${p.referencia ? ' · ' + esc(p.referencia) : ''}</small></p>
+      <div class="fl">${ic(p.anulado ? 'arrow-u-up-left' : (p.monto > 0 ? 'plus-circle' : 'gift'), 'dt', 26).replace('class="ico"', `class="ico" style="color:${p.anulado ? '#b91c1c' : p.monto > 0 ? '#15803d' : '#1d4ed8'}"`)}<p>${p.anulado ? 'Anulado' : p.monto > 0 ? 'Pago' : 'Días sin cobro'} · ${esc(p.plan || D.plan && D.plan.nombre || '')}<small>${esc(fecha(p.fecha))} · ${p.dias ? p.dias + ' días' : 'no cambia la vigencia'} · ${esc(p.fuente || '')}${p.referencia ? ' · ' + esc(p.referencia) : ''}</small></p>
       <b style="font-size:13px;${p.anulado ? 'color:#b91c1c;text-decoration:line-through' : ''}">${p.monto > 0 ? pesos(p.monto) : '—'}</b></div>`).join('') : `<div class="vacio">Todavía no tiene pagos.</div>`}</div>`;
   }
   return cab + tabs + cuerpo;
@@ -737,38 +737,77 @@ function vistaModo() {
   }
   scrollTo(0, y); enlazarModo();
 }
-/* 1.6.4 · Cambiar la cantidad de usuarios de un despacho (usuarios extra sobre su plan). No genera cobro. */
-function cambiarUsuarios() {
+/* 1.6.5 · Cambiar la cantidad de usuarios y de procesos de un despacho (de prueba o comprado). No genera cobro.
+   El límite puede quedar por encima o por debajo del plan; nunca por debajo de lo que ya está en uso. */
+async function cambiarUsuarios() {
   const D = E.detalle; if (!D || !D.plan) return;
-  const base = D.plan.usuarios || 0, enUso = D.usuarios.filter(u => u.activo).length;
-  const min = Math.max(1, enUso), max = base + 500;
-  let total = Math.max(min, base + (D.usuarios_extra || 0));
-  const inicial = total;
-  hojaSoporte(`<div class="hdr"><h4>Usuarios del despacho</h4></div>
-    <small>${esc(D.nombre)} · plan ${esc(D.plan.nombre)} (incluye ${base})</small>
-    <div class="lim-num"><button data-d="-1" aria-label="Menos">−</button><div><b id="lim-t"></b><span id="lim-u"></span></div><button data-d="1" aria-label="Más">+</button></div>
-    <div class="lim-det" id="lim-det"></div>
-    <div class="nota">${ic('info', 'regular', 15)}Este cambio no genera cobro. Rige de inmediato: el despacho solo podrá crear usuarios hasta este número. Puede subirlo o bajarlo cuando quiera, pero nunca por debajo de los usuarios que ya están en uso.</div>
+  let I;
+  try { I = await rpc('plataforma_limites_transaccional', { despacho_id: D.id, consultar: true }); }
+  catch (e) { toast(e.message || 'No se pudo consultar el despacho.'); return; }
+  const L = {
+    u: { base: I.usuarios_plan, uso: I.usuarios_en_uso, min: Math.max(1, I.usuarios_en_uso), max: I.usuarios_plan + 500, paso: 1, t: I.usuarios_plan + I.usuarios_extra, uno: 'usuario', var: 'usuarios', icono: 'users-three', tit: 'Usuarios' },
+    q: { base: I.procesos_plan, uso: I.procesos_en_uso, min: I.procesos_en_uso, max: I.procesos_plan + 100000, paso: 10, t: I.procesos_plan + I.procesos_extra, uno: 'proceso', var: 'procesos', icono: 'folders', tit: 'Procesos en vigilancia' },
+  };
+  L.u.t = Math.max(L.u.min, L.u.t); L.q.t = Math.max(L.q.min, L.q.t);
+  const ini = { u: L.u.t, q: L.q.t };
+  const esPago = I.tipo === 'pago';
+  const P = { modo: 'pago', monto: 0, medio: 'Transferencia', comp: '' };
+  const bloque = k => `<div class="lim-b"><div class="lim-tit">${ic(L[k].icono, 'dt', 20)}${L[k].tit}</div>
+    <div class="lim-num"><button data-k="${k}" data-d="-1" aria-label="Menos">−</button><div><input id="lim-${k}" inputmode="numeric" aria-label="${L[k].tit}"><span id="lim-${k}-u"></span></div><button data-k="${k}" data-d="1" aria-label="Más">+</button></div>
+    <div class="lim-det" id="lim-${k}-det"></div></div>`;
+  hojaSoporte(`<div class="hdr"><h4>Usuarios y procesos</h4></div>
+    <small>${esc(D.nombre)} · plan ${esc(D.plan.nombre)} (incluye ${L.u.base} ${L.u.base === 1 ? 'usuario' : 'usuarios'} y ${L.q.base} procesos)</small>
+    <div class="lim-dos">${bloque('u')}${bloque('q')}</div>
+    <div id="lim-pago"></div>
+    <div class="nota">${ic('info', 'regular', 15)}Rige de inmediato. Puede subirlo o bajarlo cuando quiera, pero nunca por debajo de lo que ya está en uso.${esPago ? '' : ' Este despacho no es de pago: los extras van sin cobro.'}</div>
     <div class="nd-err" id="lim-err"></div>
     <div class="acc"><button class="btn az" data-cerrar>Cancelar</button><button class="btn oro" id="lim-ok"><span class="cir">${ic('check', 'bold', 15)}</span>Guardar</button></div>`, (h, cerrar) => {
     h.classList.add('nd', 'lim');
-    const pintar = () => {
-      h.querySelector('#lim-t').textContent = total;
-      h.querySelector('#lim-u').textContent = total === 1 ? 'usuario' : 'usuarios';
-      h.querySelector('#lim-det').innerHTML = (total === base ? `Lo que incluye el plan` : total > base ? `${base} del plan + <b>${total - base} extra</b>` : `<b>${base - total} menos</b> de lo que incluye el plan`) + ` · ${enUso} en uso`;
-      h.querySelector('[data-d="-1"]').disabled = total <= min;
-      h.querySelector('[data-d="1"]').disabled = total >= max;
-      h.querySelector('#lim-ok').disabled = total === inicial;
+    const pintar = soloTexto => {
+      for (const k of ['u', 'q']) {
+        const x = L[k];
+        if (!soloTexto) h.querySelector('#lim-' + k).value = x.t;
+        h.querySelector(`#lim-${k}-u`).textContent = x.t === 1 ? x.uno : x.var;
+        h.querySelector(`#lim-${k}-det`).innerHTML = (x.t === x.base ? 'Lo que incluye el plan' : x.t > x.base ? `${x.base} del plan + <b>${x.t - x.base} extra</b>` : `<b>${x.base - x.t} menos</b> de lo que incluye el plan`) + ` · ${x.uso} en uso`;
+        h.querySelector(`[data-k="${k}"][data-d="-1"]`).disabled = x.t <= x.min;
+        h.querySelector(`[data-k="${k}"][data-d="1"]`).disabled = x.t >= x.max;
+      }
+      h.querySelector('#lim-ok').disabled = L.u.t === ini.u && L.q.t === ini.q;
+      const sube = L.u.t > ini.u || L.q.t > ini.q, caja = h.querySelector('#lim-pago');
+      const quiere = esPago && sube;
+      if (!quiere) { if (caja.innerHTML) caja.innerHTML = ''; return; }
+      if (caja.dataset.modo === P.modo && caja.innerHTML) return;
+      caja.dataset.modo = P.modo;
+      caja.innerHTML = `<div class="sub-t">Estos extras son</div>
+        <div class="tipo"><button data-modo="pago" class="${P.modo === 'pago' ? 'on' : ''}">${ic('credit-card', 'dt', 26)}<span><b>Pagados</b><em>Quedan en Ventas</em></span></button>
+        <button data-modo="obsequio" class="${P.modo === 'obsequio' ? 'on' : ''}">${ic('gift', 'dt', 26)}<span><b>Obsequio</b><em>Sin cobro</em></span></button></div>
+        ${P.modo === 'pago' ? `<div class="chips">${MEDIOS.map(m => `<button data-medio="${esc(m)}" class="${P.medio === m ? 'on' : ''}">${esc(m)}</button>`).join('')}</div>
+        <div class="fila2" style="margin-top:8px"><input class="campo" id="lim-monto" inputmode="numeric" aria-label="Valor recibido" placeholder="Valor recibido" value="${P.monto ? esc(pesos(P.monto)) : ''}"><input class="campo" id="lim-comp" maxlength="40" placeholder="Comprobante" value="${esc(P.comp)}"></div>` : ''}`;
+      caja.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { P.modo = b.dataset.modo; caja.dataset.modo = ''; pintar(true); });
+      caja.querySelectorAll('[data-medio]').forEach(b => b.onclick = () => { P.medio = b.dataset.medio; caja.querySelectorAll('[data-medio]').forEach(x => x.classList.toggle('on', x === b)); });
+      const mo = caja.querySelector('#lim-monto'); if (mo) { mo.oninput = () => { P.monto = numPesos(mo.value); }; mo.onblur = () => { mo.value = P.monto ? pesos(P.monto) : ''; }; }
+      const co = caja.querySelector('#lim-comp'); if (co) co.oninput = () => { P.comp = co.value; };
     };
-    h.querySelectorAll('.lim-num button').forEach(b => b.onclick = () => { total = Math.max(min, Math.min(max, total + Number(b.dataset.d))); h.querySelector('#lim-err').textContent = ''; pintar(); });
+    h.querySelectorAll('.lim-num button').forEach(b => b.onclick = () => { const x = L[b.dataset.k], d = Number(b.dataset.d);
+      x.t = Math.max(x.min, Math.min(x.max, d > 0 ? Math.floor(x.t / x.paso) * x.paso + x.paso : Math.ceil(x.t / x.paso) * x.paso - x.paso));
+      h.querySelector('#lim-err').textContent = ''; pintar(); });
+    ['u', 'q'].forEach(k => { const inp = h.querySelector('#lim-' + k);
+      inp.oninput = () => { inp.value = inp.value.replace(/\D/g, '').slice(0, 6); const n = Number(inp.value); if (inp.value !== '') { L[k].t = Math.min(L[k].max, n); pintar(true); } };
+      inp.onblur = () => { L[k].t = Math.max(L[k].min, Math.min(L[k].max, Number(inp.value) || 0)); pintar(); }; });
     pintar();
     h.querySelector('#lim-ok').onclick = async () => {
       const ok = h.querySelector('#lim-ok'); ok.disabled = true;
+      for (const k of ['u', 'q']) L[k].t = Math.max(L[k].min, Math.min(L[k].max, L[k].t));
+      const cobra = esPago && (L.u.t > ini.u || L.q.t > ini.q);
+      if (cobra && P.modo === 'pago' && !(P.monto > 0)) { h.querySelector('#lim-err').textContent = 'Escriba el valor que le pagaron.'; ok.disabled = false; return; }
+      const datos = { despacho_id: D.id, usuarios_extra: L.u.t - L.u.base, procesos_extra: L.q.t - L.q.base, modo: cobra ? P.modo : 'sin_cobro' };
+      if (cobra && P.modo === 'pago') Object.assign(datos, { monto: P.monto, medio: P.medio, comprobante: P.comp });
       try {
-        const r = await rpc('plataforma_limites_transaccional', { despacho_id: D.id, usuarios_extra: total - base, procesos_extra: D.procesos_extra || 0 });
-        if (E.detalle && E.detalle.id === D.id) E.detalle.usuarios_extra = r.usuarios_extra;
+        const r = await rpc('plataforma_limites_transaccional', datos);
+        if (E.detalle && E.detalle.id === D.id) { E.detalle.usuarios_extra = r.usuarios_extra; E.detalle.procesos_extra = r.procesos_extra; }
         cerrar(); vistaDespachos();
-        toast(`Listo. ${D.nombre} ahora puede tener ${total} ${total === 1 ? 'usuario' : 'usuarios'}.`);
+        if (r.pago_id) { E.ventas = null; E.detalle = null; abrirDespacho(D.id); }
+        toast(`Listo. ${D.nombre} queda con ${L.u.t} ${L.u.t === 1 ? 'usuario' : 'usuarios'} y ${L.q.t} procesos${r.pago_id ? ` · pago de ${pesos(P.monto)} registrado en Ventas` : r.modo === 'obsequio' ? ' · como obsequio' : ''}.`);
       } catch (e) { h.querySelector('#lim-err').textContent = e.message || 'No se pudo guardar. Inténtelo de nuevo.'; ok.disabled = false; }
     };
   });
