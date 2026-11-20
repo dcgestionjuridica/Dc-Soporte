@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.5.0';
+const VERSION = '1.5.1';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -66,14 +66,15 @@ async function rpc(fn, datos = {}) {
 async function salir(motivo) {
   const s = leerSesion();
   if (s) fetch(`${SB}/auth/v1/logout`, { method: 'POST', headers: { apikey: LLAVE, Authorization: 'Bearer ' + s.t } }).catch(() => { });
-  borrarSesion(); Object.assign(E, { tablero: null, despachos: null, detalle: null, det: null, ventas: null, vista: 'inicio' });
+  pararVivo(); clearTimeout(reloj); document.querySelectorAll('.hoja').forEach(h => h.remove());
+  borrarSesion(); Object.assign(E, { tablero: null, despachos: null, detalle: null, det: null, ventas: null, vista: 'inicio', soporte: null, modo: null, vivo: null, buzon: null, caso: null, casoId: null, ajustes: null, ajSec: null, borrador: '' });
   pintarEntrada(motivo);
 }
-let reloj = null;
+let reloj = null, vigilando = false;
+function reiniciarInactividad() { clearTimeout(reloj); if (leerSesion()) reloj = setTimeout(() => salir('Se cerró la sesión por 15 minutos sin uso.'), INACTIVIDAD_MIN * 60000); }
 function vigilarInactividad() {
-  const reiniciar = () => { clearTimeout(reloj); reloj = setTimeout(() => salir('Se cerró la sesión por 15 minutos sin uso.'), INACTIVIDAD_MIN * 60000); };
-  ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(ev => addEventListener(ev, reiniciar, { passive: true }));
-  reiniciar();
+  if (!vigilando) { vigilando = true; ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(ev => addEventListener(ev, reiniciarInactividad, { passive: true })); }
+  reiniciarInactividad();
 }
 
 /* ---------- entrada (copia de la entrada de la web de DC Gestión Jurídica) ---------- */
@@ -163,6 +164,8 @@ function pintar(html) {
   $app.querySelectorAll('[data-pronto]').forEach(b => b.onclick = () => toast(b.dataset.pronto));
   $app.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => abrirChatDespacho(Number(b.dataset.chat)));
   $app.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { pararVivo(); E.vista = 'soporte'; E.det = null; E.casoId = null; E.modo = Number(b.dataset.modo); E.vivo = null; scrollTo(0, 0); render(); });
+  const va = document.getElementById('ver-atencion'); if (va) va.onclick = () => { const t = document.getElementById('atencion'); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); t.classList.add('resalta'); setTimeout(() => t.classList.remove('resalta'), 1600); } };
+  $app.querySelectorAll('[data-nuevo-desp]').forEach(b => b.onclick = nuevoDespacho);
   const ct = document.getElementById('cambiar-tema');
   if (ct) ct.onclick = () => {
     const nuevo = document.documentElement.getAttribute('data-tema') === 'claro' ? 'oscuro' : 'claro';
@@ -170,7 +173,13 @@ function pintar(html) {
     document.documentElement.setAttribute('data-tema', nuevo); render();
   };
 }
-function ir(v) { if (v === 'soporte') { E.modo = null; E.soporte = null; E.casoId = null; E.buzon = null; } pararVivo(); E.vista = v; if (v !== 'despachos') E.det = null; scrollTo(0, 0); render(); }
+function ir(destino) {
+  const [v, sub] = String(destino).split(':');
+  if (v === 'soporte') { E.modo = null; E.soporte = null; E.casoId = null; E.buzon = null; if (sub === 'asistencia') E.sopTab = 'asistencia'; else if (sub) { E.sopTab = 'buzon'; E.buzTab = sub; } }
+  if (v === 'ajustes') { E.ajustes = null; E.ajSec = sub || null; }
+  pararVivo(); E.vista = v; if (v !== 'despachos') E.det = null; scrollTo(0, 0); render();
+  if (v === 'inicio' && E.tablero) cargar('tablero', () => rpc('dcsoporte_tablero_transaccional')).then(ok => ok && E.vista === 'inicio' && render());
+}
 function render() {
   try {
     if (E.vista === 'inicio') return vistaInicio();
@@ -195,7 +204,7 @@ function vistaInicio() {
     <div class="hola"><small>Bienvenido,</small><h2>Darío Carvajal</h2><div class="rol">${ic('shield-check', 'fill', 15).replace('class="ico"', 'class="ico" style="color:#e7b94a"')}Dueño de la plataforma</div>
     <div class="fecha">${ic('calendar-blank', 'regular', 17)}${esc(hoy.charAt(0).toUpperCase() + hoy.slice(1))}</div></div>
     <div class="der"><button class="btn-ico" id="cambiar-tema" aria-label="Cambiar modo claro u oscuro">${ic(document.documentElement.getAttribute('data-tema') === 'claro' ? 'moon' : 'sun', 'regular', 26)}</button>
-    <button class="btn-ico" data-pronto="Las alertas al celular llegan en la etapa 6." aria-label="Avisos">${ic('bell', 'regular', 26)}${T && T.atencion.length ? '<i></i>' : ''}</button>
+    <button class="btn-ico" id="ver-atencion" aria-label="Avisos">${ic('bell', 'regular', 26)}${T && T.atencion.length ? '<i></i>' : ''}</button>
     <button class="btn-ico" data-ir="ajustes" aria-label="Mi cuenta">${ic('user-circle', 'regular', 28)}</button></div></header>`;
   if (!T) { pintar(cab + '<div class="cargando"></div>'); return; }
   const dif = T.ingreso_mes_anterior > 0 ? Math.round((T.ingreso_mes - T.ingreso_mes_anterior) * 100 / T.ingreso_mes_anterior) : null;
@@ -208,20 +217,20 @@ function vistaInicio() {
   const M = (v, icono, t, extra, msg) => `<button class="mod ${v === 'despachos' ? 'on' : ''}" ${msg ? `data-pronto="${esc(msg)}"` : `data-ir="${v}"`}>${ic(icono, 'dt', 38).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}<div>${t}</div>${extra || ''}</button>`;
   const grid = `<div class="sec">${ic('squares-four', 'fill', 22)}Centro de control<a data-ir="despachos">Ver todo${ic('caret-right', 'bold', 12)}</a></div><div class="grid">
     ${M('despachos', 'buildings', 'Despachos')}${M('ventas', 'chart-line-up', 'Ventas')}
-    ${M('asist', 'headset', 'Asistencia', '', 'La asistencia remota llega en la etapa 4.')}${M('err', 'bug-beetle', 'Errores', T.errores_7d ? `<span class="bad">${T.errores_7d}</span>` : '', 'El buzón de errores llega en la etapa 5.')}
-    ${M('pqrs', 'chat-circle-text', 'PQRS', '', 'El buzón de PQRS llega en la etapa 5.')}${M('anun', 'megaphone', 'Anuncios', '', 'Los anuncios llegan en la etapa 6.')}
-    ${M('planes', 'tag', 'Planes y precios', '', 'Planes y precios llegan en la etapa 6.')}${M('salud', 'heartbeat', 'Salud', '', 'La salud del sistema llega en la etapa 6.')}</div>
+    ${M('soporte:asistencia', 'headset', 'Asistencia')}${M('soporte:errores', 'bug-beetle', 'Errores', T.errores_7d ? `<span class="bad">${T.errores_7d}</span>` : '')}
+    ${M('soporte:pqrs', 'chat-circle-text', 'PQRS')}${M('ajustes:anuncios', 'megaphone', 'Anuncios')}
+    ${M('ajustes:planes', 'tag', 'Planes y precios')}${M('ajustes:salud', 'heartbeat', 'Salud')}</div>
 </div>`;
-  const acc = (lado) => `<div class="acc acc-${lado}"><button class="btn oro" data-pronto="Dar de alta un despacho desde aquí llega en la etapa 6. Por ahora use Soporte técnico en la app."><span class="cir">${ic('plus', 'bold', 16)}</span>Nuevo despacho</button>
-    <button class="btn az" data-pronto="Los anuncios a todos los despachos llegan en la etapa 6.">${ic('paper-plane-tilt', 'regular', 20)}Enviar anuncio</button>`;
+  const acc = (lado) => `<div class="acc acc-${lado}"><button class="btn oro" data-nuevo-desp><span class="cir">${ic('plus', 'bold', 16)}</span>Nuevo despacho</button>
+    <button class="btn az" data-ir="ajustes:anuncios">${ic('paper-plane-tilt', 'regular', 20)}Enviar anuncio</button>`;
   const atn = T.atencion.length ? T.atencion.map(a => {
     const [icono, col] = ATN[a.tipo] || ['warning-circle', '#5b6478'];
     return `<div class="fl" ${a.despacho_id ? `data-desp="${Number(a.despacho_id)}" style="cursor:pointer"` : ''}>${ic(icono, 'dt', 26).replace('class="ico"', `class="ico" style="color:${col}"`)}<p>${esc(a.titulo)}<small>${esc(a.detalle)}</small></p><div class="h">${esc(hace(a.fecha))}</div></div>`;
   }).join('') : `<div class="vacio">${ic('shield-check', 'dt', 24).replace('class="ico"', 'class="ico" style="color:#15803d"')}Todo en orden. No hay nada pendiente.</div>`;
-  const tar = `<div class="tar"><h4>${ic('clock-countdown', 'regular', 22)}Requiere su atención<a data-ir="despachos">Ver todo${ic('caret-right', 'bold', 12)}</a></h4>${atn}</div>
+  const tar = `<div class="tar" id="atencion"><h4>${ic('clock-countdown', 'regular', 22)}Requiere su atención<a data-ir="despachos">Ver todo${ic('caret-right', 'bold', 12)}</a></h4>${atn}</div>
     <div class="tar"><h4>${ic('heartbeat', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Resumen de despachos</h4>
       <div class="dato"><span>Pagaron por la página</span><b>${T.pagos}</b></div><div class="dato"><span>En prueba</span><b>${T.prueba}</b></div>
-      <div class="dato"><span>Invitados</span><b>${T.invitados}</b></div><div class="dato"><span>Versión en uso</span><b>${esc(T.version || '—')}</b></div></div>`;
+      <div class="dato"><span>Invitados</span><b>${T.invitados}</b></div><div class="dato"><span>Versión publicada · en uso</span><b>${esc(T.version_publicada || '—')} · ${esc(T.version || '—')}</b></div></div>`;
   pintar(cab + `<div class="cuerpo"><div class="inicio-cols"><div>${kpis}${grid}${acc('izq')}</div><div>${tar}${acc('der')}</div></div></div>`);
 }
 
@@ -357,7 +366,10 @@ function vistaAjustes() {
   const cab = `<header class="top2">${sec && innerWidth < 900 ? `<button class="vol" id="volver-aj" aria-label="Volver">${ic('caret-left', 'bold', 20)}</button>` : logoHtml()}<div><b>${sec && innerWidth < 900 ? esc(SECCIONES_AJ.find(x => x[0] === sec)[3]) : 'Ajustes'}</b><small>DC Soporte ${VERSION}</small></div></header>`;
   if (!A) {
     pintar(cab + `<div class="cuerpo"><div class="cargando"></div></div>`); enlazarAjustes();
-    cargar('ajustes', async () => rpc('dcsoporte_ajustes_transaccional', { endpoint: await endpointPush() })).then(ok => ok && E.vista === 'ajustes' && vistaAjustes());
+    cargar('ajustes', async () => rpc('dcsoporte_ajustes_transaccional', { endpoint: await endpointPush() })).then(ok => {
+      if (E.vista !== 'ajustes') return; if (ok) return vistaAjustes();
+      const cu = $app.querySelector('.cuerpo'); if (cu) { cu.innerHTML = `<div class="tar"><div class="vacio">${ic('warning-circle')}No se pudieron cargar los ajustes.</div><div class="acc"><button class="btn az" id="reintentar-aj">${ic('arrows-clockwise', 'regular', 20)}Intentar de nuevo</button></div></div>`; document.getElementById('reintentar-aj').onclick = () => vistaAjustes(); }
+    });
     return;
   }
   const icT = (n, col, t = 26) => ic(n, 'dt', t).replace('class="ico"', `class="ico" style="color:${col}"`);
@@ -751,7 +763,29 @@ async function abrirChatDespacho(desp) {
   if (!E.buzon) await cargar('buzon', () => rpc('dcsoporte_buzon_transaccional'));
   const c = E.buzon && E.buzon.casos.find(x => x.despacho_id === desp && x.estado !== 'cerrado');
   if (c) return abrirCaso(c.id);
-  toast('Este despacho no tiene casos abiertos. Cuando escriba desde su app, el chat aparece aquí.');
+  const d = (E.despachos && E.despachos.despachos.find(x => x.id === desp)) || (E.detalle && E.detalle.id === desp ? E.detalle : {}) || {};
+  hojaSoporte(`<h4>Escribirle a ${esc(d.nombre || 'este despacho')}</h4><small>Se abre un caso nuevo en el buzón. El titular y los administradores lo ven en su app, en Configuración › Soporte técnico › Mis casos, y pueden responderle.</small>
+    <input class="campo" id="h-asunto" maxlength="120" placeholder="Asunto (ej.: Revisión de su cuenta)" style="margin-top:12px">
+    <textarea class="campo" id="h-texto" rows="4" maxlength="2000" placeholder="Escriba su mensaje"></textarea>
+    <div class="acc"><button class="btn az" data-cerrar>Cancelar</button><button class="btn oro" id="h-enviar"><span class="cir">${ic('paper-plane-tilt', 'bold', 15)}</span>Enviar</button></div>`, (h, cerrar) => {
+    setTimeout(() => h.querySelector('#h-asunto').focus(), 250);
+    h.querySelector('#h-enviar').onclick = async () => {
+      const asunto = h.querySelector('#h-asunto').value.trim(), texto = h.querySelector('#h-texto').value.trim();
+      if (asunto.length < 3) return toast('Escriba el asunto.'); if (texto.length < 3) return toast('Escriba el mensaje.');
+      const b = h.querySelector('#h-enviar'); b.disabled = true;
+      try { const r = await rpc('dcsoporte_caso_crear_transaccional', { despacho_id: desp, asunto, texto }); cerrar(); E.buzon = null; toast('Mensaje enviado. El despacho lo ve en su app.'); abrirCaso(r.id); }
+      catch (e) { b.disabled = false; toast('No se pudo enviar: ' + e.message); }
+    };
+  });
+}
+function nuevoDespacho() {
+  hojaSoporte(`<h4>Nuevo despacho</h4><small>Hay dos caminos:</small>
+    <div class="dato"><span>Cliente que paga</span><b>Compra solo en la página, con Bold</b></div>
+    <div class="dato"><span>Despacho de prueba (sin cobro)</span><b>App comercial › Configuración › Soporte técnico › Despachos de prueba</b></div>
+    <div class="nota">Crear el despacho de prueba también crea el usuario titular y le envía la contraseña por correo. Eso solo se puede hacer desde la app comercial.</div>
+    <div class="acc"><button class="btn az" data-cerrar>Cerrar</button><button class="btn oro" id="h-abrir-app"><span class="cir">${ic('arrow-square-out', 'bold', 15)}</span>Abrir la app comercial</button></div>`, (h, cerrar) => {
+    h.querySelector('#h-abrir-app').onclick = () => { cerrar(); const w = window.open(APP_COMERCIAL, '_blank'); if (w) w.opener = null; };
+  });
 }
 async function cargarCaso(silencio) {
   const id = E.casoId;
@@ -812,9 +846,8 @@ function forzarVersion(id, nombre) {
 }
 
 function vistaPronto(v) {
-  const P = { ventas: ['chart-line-up', 'Ventas', 'La contabilidad de ventas, renovaciones y anulaciones de Bold llega en la etapa 2.'], soporte: ['lifebuoy', 'Soporte', 'La asistencia remota llega en la etapa 4, y el buzón de errores y PQRS en la etapa 5.'] }[v] || ['gear-six', 'Próximamente', ''];
-  pintar(`<header class="top2">${logoHtml()}<div><b>${P[1]}</b><small>En construcción</small></div></header><div class="cuerpo">
-    <div class="tar" style="text-align:center;padding:28px 18px">${ic(P[0], 'dt', 56).replace('class="ico"', 'class="ico" style="color:#0f1e3d;margin:0 auto 10px"')}<b style="font-size:16px">${P[1]}</b><div class="nota" style="font-size:13px">${P[2]}</div></div></div>`);
+  pintar(`<header class="top2">${logoHtml()}<div><b>DC Soporte</b><small>Pantalla no encontrada</small></div></header><div class="cuerpo">
+    <div class="tar" style="text-align:center;padding:28px 18px">${ic('compass', 'dt', 56).replace('class="ico"', 'class="ico" style="color:#0f1e3d;margin:0 auto 10px"')}<div class="nota" style="font-size:13px">Esta pantalla no existe. Toque Inicio para volver.</div></div></div>`);
 }
 
 /* ---------- arranque ---------- */

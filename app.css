@@ -340,3 +340,4 @@ button.logo{padding:0;overflow:hidden;cursor:pointer;font-family:inherit}
 @media (min-width:900px) and (max-height:620px){.aj-cols .tar{padding:10px 14px;margin-bottom:8px}.aj-cols .fl{padding:6px 0}.aj-cols .fila-sw{padding:4px 0 8px}.aj-cols .chk{padding:5px 0}.aj-cols .nota{margin-top:3px}.aj-cols .kpis.dos{margin-bottom:8px}}
 @media (min-width:900px) and (max-height:620px){.aj-it{padding:5px 12px;border-radius:13px}.aj-it .ico:first-child{width:24px;height:24px}.aj-menu{gap:5px}}
 @media (min-width:900px){.planes-g{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}.planes-g .pl-g{grid-template-columns:1fr 1fr}}
+.tar.resalta{box-shadow:0 0 0 3px var(--oro),var(--tar-sombra);transition:box-shadow .3s}
