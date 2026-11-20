@@ -1,5 +1,6 @@
 /* DC Soporte · pantalla de entrada, copia de la entrada de la web de DC Gestión Jurídica (1.7.42).
    Todo va dentro de .ent para no chocar con los estilos del resto de la app. Siempre oscura, como el modelo. */
+/* 1.0.7: en pantallas anchas el contenido se escala solo (entrada.js) y la escena siempre llena la pantalla */
 .ent{--navy:#0d2550;--texto:#16213a;--oro1:#f6d27a;--oro2:#d79a2b;--azul-link:#1a5fd6;
   position:relative;min-height:100vh;min-height:100dvh;width:100%;overflow:hidden;color:#fff;
   font-family:'Figtree',system-ui,sans-serif;background:#050c1d;
@@ -150,3 +151,4 @@
 @media (prefers-reduced-motion:reduce){.ent *{animation-duration:.01s!important;animation-delay:0s!important;animation-iteration-count:1!important}}
 #app.modo-ent{max-width:none;padding-bottom:0;margin:0}
 #app.modo-ent:before,#app.modo-ent:after{display:none}
+@media (min-width:821px){.ent{padding:20px 6.5vw 34px 4vw}.ent .ent-marca{width:auto}.ent .marca-in{width:540px}}

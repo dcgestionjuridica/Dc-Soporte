@@ -8,6 +8,20 @@ function efectosEntrada() {
   let vivo = true; const quitar = [];
   const on = (o, ev, f, op) => { o.addEventListener(ev, f, op); quitar.push(() => o.removeEventListener(ev, f, op)); };
 
+  /* tamaño automático: en pantallas anchas todo se escala según el ancho y el ALTO disponibles (igual que la web de DC) */
+  const piezas = [raiz.querySelector('.ent-marca'), raiz.querySelector('.tarjeta')];
+  function escala() {
+    const ancho = innerWidth, alto = innerHeight;
+    if (ancho > 820) {
+      const e = Math.max(0.45, Math.min(1.3, Math.min(ancho / 1670, alto / 942)));
+      piezas.forEach(p => { p.style.zoom = e; });
+    } else {
+      const e = Math.max(0.8, Math.min(1, alto / 760));
+      piezas.forEach(p => { p.style.zoom = alto < 760 ? e : ''; });
+    }
+  }
+  escala(); on(window, 'resize', escala);
+
   /* red de puntos */
   const c = document.getElementById('red'), x = c.getContext('2d'), d = Math.min(2, devicePixelRatio || 1), m = { x: -9999, y: -9999 };
   let W, H, P = [], last = 0;
