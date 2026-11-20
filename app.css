@@ -357,3 +357,9 @@ button.logo{padding:0;overflow:hidden;cursor:pointer;font-family:inherit}
 .hoja .hb-oferta .btn{white-space:nowrap;gap:8px;padding:0 10px}
 .hoja .hb-oferta .btn.oro{flex:1.35}
 .hoja .hb-oferta .btn.oro .cir{width:26px;height:26px;flex:none}
+/* 1.6.1 · botones de las ventanas: mismo espacio arriba y abajo */
+.hoja .acc{margin:16px 0 0}
+.hoja .acc .btn{margin-bottom:0;justify-content:center;text-align:center;width:auto;flex:1}
+.hoja .acc .btn span{flex:none}
+.hoja .caja > .nota:last-child{margin-bottom:0}
+@media (min-width:900px){.hoja .caja{padding-bottom:22px}}
