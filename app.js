@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.0.3';
+const VERSION = '1.0.4';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -202,7 +202,7 @@ function vistaInicio() {
     ${k('pulse', T.conectados, 'Conectados', `${T.usuarios_hoy} hoy`, 'neu', '')}
     ${k('warning-circle', T.errores_7d, 'Errores 7 días', T.errores_7d > T.errores_ayer ? `+${T.errores_7d - T.errores_ayer}` : 'en calma', T.errores_7d > T.errores_ayer ? 'down' : 'up', T.errores_7d > T.errores_ayer ? 'trend-up' : '')}</div>`;
   const M = (v, icono, t, extra, msg) => `<button class="mod ${v === 'despachos' ? 'on' : ''}" ${msg ? `data-pronto="${esc(msg)}"` : `data-ir="${v}"`}>${ic(icono, 'dt', 38).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}<div>${t}</div>${extra || ''}</button>`;
-  const grid = `<div class="sec">${ic('squares-four', 'fill', 22)}Centro de control</div><div class="grid">
+  const grid = `<div class="sec">${ic('squares-four', 'fill', 22)}Centro de control<a data-ir="despachos">Ver todo${ic('caret-right', 'bold', 12)}</a></div><div class="grid">
     ${M('despachos', 'buildings', 'Despachos')}${M('ventas', 'chart-line-up', 'Ventas', '', 'Ventas y contabilidad llegan en la etapa 2.')}
     ${M('asist', 'headset', 'Asistencia', '', 'La asistencia remota llega en la etapa 4.')}${M('err', 'bug-beetle', 'Errores', T.errores_7d ? `<span class="bad">${T.errores_7d}</span>` : '', 'El buzón de errores llega en la etapa 5.')}
     ${M('pqrs', 'chat-circle-text', 'PQRS', '', 'El buzón de PQRS llega en la etapa 5.')}${M('anun', 'megaphone', 'Anuncios', '', 'Los anuncios llegan en la etapa 6.')}
@@ -213,7 +213,7 @@ function vistaInicio() {
     const [icono, col] = ATN[a.tipo] || ['warning-circle', '#5b6478'];
     return `<div class="fl" ${a.despacho_id ? `data-desp="${Number(a.despacho_id)}" style="cursor:pointer"` : ''}>${ic(icono, 'dt', 26).replace('class="ico"', `class="ico" style="color:${col}"`)}<p>${esc(a.titulo)}<small>${esc(a.detalle)}</small></p><div class="h">${esc(hace(a.fecha))}</div></div>`;
   }).join('') : `<div class="vacio">${ic('shield-check', 'dt', 24).replace('class="ico"', 'class="ico" style="color:#15803d"')}Todo en orden. No hay nada pendiente.</div>`;
-  const tar = `<div class="tar"><h4>${ic('clock-countdown', 'regular', 22)}Requiere su atención</h4>${atn}</div>
+  const tar = `<div class="tar"><h4>${ic('clock-countdown', 'regular', 22)}Requiere su atención<a data-ir="despachos">Ver todo${ic('caret-right', 'bold', 12)}</a></h4>${atn}</div>
     <div class="tar"><h4>${ic('heartbeat', 'dt', 22).replace('class="ico"', 'class="ico" style="color:#0f1e3d"')}Resumen de despachos</h4>
       <div class="dato"><span>Pagaron por la página</span><b>${T.pagos}</b></div><div class="dato"><span>En prueba</span><b>${T.prueba}</b></div>
       <div class="dato"><span>Invitados</span><b>${T.invitados}</b></div><div class="dato"><span>Versión en uso</span><b>${esc(T.version || '—')}</b></div></div>`;
