@@ -1,7 +1,7 @@
 /* DC Soporte · centro de control de la plataforma DC Gestión Jurídica
    Solo la cuenta de plataforma puede ver datos: cada consulta la verifica el servidor. */
 'use strict';
-const VERSION = '1.6.3';
+const VERSION = '1.6.4';
 const SB = 'https://okvxxppudwbcldxpxyfw.supabase.co';
 const LLAVE = 'sb_publishable_oDR8SiWeo1owprP7to2azQ_S30AT_8Y';
 const CLAVE_SESION = 'dcsoporte-sesion';
@@ -234,6 +234,7 @@ function pintar(html) {
   $app.querySelectorAll('[data-modo]').forEach(b => b.onclick = () => { pararVivo(); E.vista = 'soporte'; E.det = null; E.casoId = null; E.modo = Number(b.dataset.modo); E.vivo = null; scrollTo(0, 0); render(); });
   const va = document.getElementById('ver-atencion'); if (va) va.onclick = () => { const t = document.getElementById('atencion'); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); t.classList.add('resalta'); setTimeout(() => t.classList.remove('resalta'), 1600); } };
   $app.querySelectorAll('[data-nuevo-desp]').forEach(b => b.onclick = nuevoDespacho);
+  const cl = document.getElementById('cambiar-lim'); if (cl) cl.onclick = cambiarUsuarios;
   $app.querySelectorAll('[data-reenviar]').forEach(b => b.onclick = () => reenviarEnlace(Number(b.dataset.reenviar), b.dataset.nom));
   const ct = document.getElementById('cambiar-tema');
   if (ct) ct.onclick = () => {
@@ -361,7 +362,7 @@ function panelDetalle() {
     cuerpo = `<div class="kpis dos">
       <div class="k"><div class="l1">${ic('plugs-connected', 'regular', 24)}<b>${U && U.conectado ? 'Ahora' : esc(U ? hace(U.fecha) : 'Nunca')}</b></div><span>Última conexión${U ? ' · ' + esc(U.equipo || '') : ''}</span><em class="${U && U.conectado ? 'up' : 'neu'}">${U ? (U.conectado ? ic('circle', 'fill', 9) : '') + esc(U.usuario || '') : 'Aún no entra'}</em></div>
       <div class="k"><div class="l1">${ic('timer', 'regular', 24)}<b>${esc(duracion(D.minutos_total))}</b></div><span>Tiempo de uso total</span><em class="${D.minutos_7d ? 'up' : 'neu'}">${D.minutos_7d ? ic('trend-up', 'bold', 11) : ''}${esc(duracion(D.minutos_7d))} esta semana</em></div>
-      <div class="k"><div class="l1">${ic('users-three', 'regular', 24)}<b>${activos} de ${lim || '—'}</b></div><span>Usuarios del plan</span><em class="neu">${esc(Object.entries(roles).map(([r, n]) => `${n} ${r}`).join(' · ') || 'Sin usuarios')}</em></div>
+      <div class="k"><div class="l1">${ic('users-three', 'regular', 24)}<b>${activos} de ${lim || '—'}</b>${D.plan ? `<button class="cambiar-lim" id="cambiar-lim" aria-label="Cambiar cantidad de usuarios">${ic('pencil-simple-line', 'bold', 15)}</button>` : ''}</div><span>Usuarios del plan</span><em class="neu">${esc(Object.entries(roles).map(([r, n]) => `${n} ${r}`).join(' · ') || 'Sin usuarios')}</em></div>
       <div class="k"><div class="l1">${ic('calendar-check', 'regular', 24)}<b>${D.vigente_hasta ? esc(fecha(D.vigente_hasta, { year: '2-digit' })) : 'Sin fecha'}</b></div><span>Vigente hasta</span><em class="${vencido ? 'down' : 'neu'}">${vencido ? 'Vencido' : D.tipo === 'pago' ? 'Renueva con Bold' : 'Sin cobro'}</em></div></div>
       ${D.soporte ? `<div class="aviso">${ic('lock-key', 'fill', 22)}<div>Este despacho le dio permiso de soporte hasta el ${esc(fecha(D.soporte.vence_en))} a las ${esc(hora(D.soporte.vence_en))}</div></div>` : ''}
       ${tarUso(D, 5)}
@@ -735,6 +736,42 @@ function vistaModo() {
     const va = document.getElementById('ver-acc'); if (va && filas.length >= V.acciones.length) va.remove();
   }
   scrollTo(0, y); enlazarModo();
+}
+/* 1.6.4 · Cambiar la cantidad de usuarios de un despacho (usuarios extra sobre su plan). No genera cobro. */
+function cambiarUsuarios() {
+  const D = E.detalle; if (!D || !D.plan) return;
+  const base = D.plan.usuarios || 0, enUso = D.usuarios.filter(u => u.activo).length;
+  const min = Math.max(1, enUso), max = base + 500;
+  let total = Math.max(min, base + (D.usuarios_extra || 0));
+  const inicial = total;
+  hojaSoporte(`<div class="hdr"><h4>Usuarios del despacho</h4></div>
+    <small>${esc(D.nombre)} · plan ${esc(D.plan.nombre)} (incluye ${base})</small>
+    <div class="lim-num"><button data-d="-1" aria-label="Menos">−</button><div><b id="lim-t"></b><span id="lim-u"></span></div><button data-d="1" aria-label="Más">+</button></div>
+    <div class="lim-det" id="lim-det"></div>
+    <div class="nota">${ic('info', 'regular', 15)}Este cambio no genera cobro. Rige de inmediato: el despacho solo podrá crear usuarios hasta este número. Puede subirlo o bajarlo cuando quiera, pero nunca por debajo de los usuarios que ya están en uso.</div>
+    <div class="nd-err" id="lim-err"></div>
+    <div class="acc"><button class="btn az" data-cerrar>Cancelar</button><button class="btn oro" id="lim-ok"><span class="cir">${ic('check', 'bold', 15)}</span>Guardar</button></div>`, (h, cerrar) => {
+    h.classList.add('nd', 'lim');
+    const pintar = () => {
+      h.querySelector('#lim-t').textContent = total;
+      h.querySelector('#lim-u').textContent = total === 1 ? 'usuario' : 'usuarios';
+      h.querySelector('#lim-det').innerHTML = (total === base ? `Lo que incluye el plan` : total > base ? `${base} del plan + <b>${total - base} extra</b>` : `<b>${base - total} menos</b> de lo que incluye el plan`) + ` · ${enUso} en uso`;
+      h.querySelector('[data-d="-1"]').disabled = total <= min;
+      h.querySelector('[data-d="1"]').disabled = total >= max;
+      h.querySelector('#lim-ok').disabled = total === inicial;
+    };
+    h.querySelectorAll('.lim-num button').forEach(b => b.onclick = () => { total = Math.max(min, Math.min(max, total + Number(b.dataset.d))); h.querySelector('#lim-err').textContent = ''; pintar(); });
+    pintar();
+    h.querySelector('#lim-ok').onclick = async () => {
+      const ok = h.querySelector('#lim-ok'); ok.disabled = true;
+      try {
+        const r = await rpc('plataforma_limites_transaccional', { despacho_id: D.id, usuarios_extra: total - base, procesos_extra: D.procesos_extra || 0 });
+        if (E.detalle && E.detalle.id === D.id) E.detalle.usuarios_extra = r.usuarios_extra;
+        cerrar(); vistaDespachos();
+        toast(`Listo. ${D.nombre} ahora puede tener ${total} ${total === 1 ? 'usuario' : 'usuarios'}.`);
+      } catch (e) { h.querySelector('#lim-err').textContent = e.message || 'No se pudo guardar. Inténtelo de nuevo.'; ok.disabled = false; }
+    };
+  });
 }
 function hojaSoporte(html, alAbrir) {
   const h = document.createElement('div'); h.className = 'hoja';

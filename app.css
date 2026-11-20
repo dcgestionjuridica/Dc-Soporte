@@ -401,3 +401,18 @@ button.logo{padding:0;overflow:hidden;cursor:pointer;font-family:inherit}
 .nd .reenv{margin:10px 0 0;border:1.5px dashed #e7b94a;background:#fffaf0}.nd .reenv .ico{color:#c58a12;flex:none}.nd .tres button{margin:0;flex-direction:column;justify-content:center;gap:4px;font-size:12.5px;font-weight:700;padding:10px 4px;text-align:center}
 .nd .nd-err{min-height:18px;font-size:13px;font-weight:700;color:#c62828;margin-top:8px}.nd .otro-m{display:block;font-size:12px;font-weight:700;color:var(--tarT2);margin-top:8px}.nd .otro-m input{margin-top:4px}.nd .mas b{min-width:34px;text-align:center;font-size:14px}.nd .tres button:disabled,.nd .reenv:disabled{opacity:.5}.aviso-enl{align-items:center}.aviso-enl .mini-btn{flex:none;margin-left:auto}
 .nd .mas{gap:8px}.nd .mas > span:last-child{gap:4px;flex:none}@media (min-width:900px){.nd .mas > span:first-child{font-size:12.5px;gap:6px}}
+
+/* 1.6.4 · cambiar usuarios */
+.k:has(.cambiar-lim){position:relative}
+.k .l1 .cambiar-lim{position:absolute;top:9px;right:9px;width:32px;height:32px;margin:0;padding:0;display:grid;place-items:center;border-radius:50%;background:var(--oro);color:#0f1e3d;box-shadow:0 2px 8px rgba(197,138,18,.3)}
+.k .l1 .cambiar-lim svg{width:15px!important;height:15px!important}
+.lim .caja{max-width:440px}
+.lim-num{display:flex;align-items:center;justify-content:center;gap:22px;margin:18px 0 6px}
+.lim-num>div{display:flex;flex-direction:column;align-items:center;min-width:110px}
+.lim-num b{font-size:46px;line-height:1;font-weight:800;color:#0f1e3d}
+.lim-num span{font-size:13px;font-weight:700;color:var(--tarT2);margin-top:2px}
+.lim-num button{width:48px;height:48px;margin:0;padding:0;justify-content:center;border-radius:50%;font-size:24px;font-weight:700;background:#f3f5f9;color:#0f1e3d;border:1.5px solid #e3e8f0;box-shadow:none}
+.lim-num button:disabled{opacity:.35}
+.lim-det{text-align:center;font-size:13px;color:var(--tarT2);margin-bottom:12px}.lim-det b{color:#c58a12}
+.lim .nota{display:flex;gap:8px;align-items:flex-start;background:#f7f8fb;border-radius:12px;padding:10px 12px}.lim .nota svg{flex:none;margin-top:1px}
+.lim .acc .btn:disabled{opacity:.5}
